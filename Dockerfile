@@ -6,4 +6,5 @@ RUN go mod download
 RUN go build -o service_stats .
 
 EXPOSE 8080
+
 CMD ["./service_stats"]
