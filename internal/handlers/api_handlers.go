@@ -30,9 +30,10 @@ func APIHandlerInsertGrade(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": "Grade inserted successfully", "status": http.StatusOK})
 }
 
-func APIHandlerGetAvgGradeForStudent(c *gin.Context) {
-	studentID := c.Query("student_id")
-	courseID := c.Query("course_id")
+func APIHandlerGetStatsForStudent(c *gin.Context) {
+	studentID := c.Param("student_id")
+	courseID := c.Param("course_id")
+
 	if studentID == "" || courseID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"result": "Missing student_id query parameter", "status": http.StatusBadRequest})
 		return
@@ -44,7 +45,11 @@ func APIHandlerGetAvgGradeForStudent(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Average grade for student %s: %f", studentID, avgGrade)
-
-	c.JSON(http.StatusOK, gin.H{"average_grade": avgGrade, "status": http.StatusOK})
+	c.JSON(http.StatusOK, gin.H{
+		"result": gin.H{
+			"average_grade": avgGrade,
+			"tbd":           0.0,
+		},
+		"course_id": courseID,
+	})
 }

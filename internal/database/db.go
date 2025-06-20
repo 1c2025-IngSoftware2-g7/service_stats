@@ -36,7 +36,7 @@ func InitDB(posgresUrl string) error {
 	_, err = DB.Exec(statement)
 
 	if err != nil {
-		log.Fatalf("Error creating tables: %v", err)
+		log.Fatalf("[Service Stats] error creating tables: %v", err)
 	}
 	return err
 }
@@ -46,7 +46,7 @@ func InsertGrade(grade model.Grade) error {
 	_, err := DB.Exec(statement, grade.StudentID, grade.CourseID, grade.Grade, grade.OnTime)
 
 	if err != nil {
-		log.Printf("Error inserting grade: %v", err)
+		log.Printf("[Service Stats] Error inserting grade: %v", err)
 		return err
 	}
 
@@ -55,13 +55,21 @@ func InsertGrade(grade model.Grade) error {
 
 func GetAvgGradeForStudent(studentID string, courseID string) (float64, error) {
 	var avgGrade float64
-	statement := `SELECT AVG(grade) FROM grades WHERE student_id = $1 AND course_id = $2`
-	err := DB.QueryRow(statement, studentID).Scan(&avgGrade)
+	statement := `SELECT AVG(grade) FROM grades WHERE student_id = $1 AND course_id = $2 GROUP BY student_id, course_id`
+	err := DB.QueryRow(statement, studentID, courseID).Scan(&avgGrade)
 
+	// in case there are no grades for the student, we return 0
+	if err == sql.ErrNoRows {
+		log.Printf("[Service Stats] No grades found for student %s in course %s", studentID, courseID)
+		return 0.0, nil // return 0 if no grades found
+	}
+
+	// If there is an error other than no rows, log it and return the error
 	if err != nil {
-		log.Printf("Error getting average grade for student %s: %v", studentID, err)
+		log.Printf("[Service Stats] Error getting average grade for student %s: %v", studentID, err)
 		return 0, err
 	}
 
+	// Best case scenario, we return the average grade
 	return avgGrade, nil
 }

@@ -67,7 +67,7 @@ func main() {
 		routing.GET("/health", handlers.HealthCheckHandler)
 
 		routing.POST("/student/grade", handlers.APIHandlerInsertGrade)
-		routing.GET("/average/", handlers.APIHandlerGetAvgGradeForStudent)
+		routing.GET("/student/:student_id/course/:course_id", handlers.APIHandlerGetStatsForStudent)
 	}
 
 	// Lets log the server start
