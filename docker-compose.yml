@@ -9,6 +9,8 @@ services:
     depends_on:
       - postgres
       - redis
+    environment:
+      - SERVICE_STATS_POSTGRES_URL=${SERVICE_STATS_POSTGRES_URL}
 
   service_stats_queue_worker:
     build:
@@ -17,8 +19,13 @@ services:
     ports:
       - "6379:6379"
     depends_on:
-      - postgres
-      - service_stats
+      postgres:
+        condition: service_healthy
+      service_stats:
+        condition: service_started
+    environment:
+      - ASYNC_QUEUE_HOST=redis
+      - ASYNC_QUEUE_PORT=6379
 
   postgres:
     image: postgres:14
@@ -31,10 +38,16 @@ services:
     volumes:
       - postgres_stats_data:/var/lib/postgresql/data
 
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:latest
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data
 
