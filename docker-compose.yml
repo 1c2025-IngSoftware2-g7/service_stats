@@ -1,0 +1,67 @@
+services:
+  service_stats:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - SERVICE_STATS_POSTGRES_URL=${SERVICE_STATS_POSTGRES_URL}
+
+  service_stats_queue_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.queue_worker
+    ports:
+      - "6379:6379"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      service_stats:
+        condition: service_started
+    environment:
+      - ASYNC_QUEUE_HOST=redis
+      - ASYNC_QUEUE_PORT=6379
+
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: db_stats
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_stats_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+
+  asynqmon:
+    build:
+      context: .
+      dockerfile: Dockerfile.asynqmon
+    ports:
+      - "2222:2222"
+    
+    depends_on:
+      - service_stats_queue_worker
+      - redis
+
+volumes:
+  postgres_stats_data:
+  redis_data:

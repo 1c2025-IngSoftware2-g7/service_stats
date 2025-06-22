@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
-	"service_stats/internal/database"
 	"service_stats/internal/handlers"
+	"service_stats/internal/model"
+	"service_stats/internal/queue"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -33,19 +35,6 @@ func main() {
 		log.Fatal("[Stats Service] Error initializing New Relic: ", err_relic)
 	}
 
-	database_url := os.Getenv("SERVICE_STATS_POSTGRES_URL")
-
-	if database_url == "" {
-		log.Fatal("[Stats Service] SERVICE_STATS_POSTGRES_URL environment variable is not set")
-	}
-
-	// Initialize the database connection with internal/database/db.go
-	err := database.InitDB(database_url)
-
-	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
-	}
-
 	router := gin.Default()
 
 	router.Use(func(c *gin.Context) {
@@ -61,13 +50,29 @@ func main() {
 		c.Next()
 	})
 
+	server_ip := fmt.Sprintf("%s:%s", os.Getenv("ASYNC_QUEUE_HOST"), os.Getenv("ASYNC_QUEUE_PORT"))
+	enqueuer := queue.NewEnqueuer(server_ip)
+
 	{
 		routing := router.Group("/stats")
 
 		routing.GET("/health", handlers.HealthCheckHandler)
 
-		routing.POST("/student/grade", handlers.APIHandlerInsertGrade)
-		routing.GET("/average/", handlers.APIHandlerGetAvgGradeForStudent)
+		//routing.POST("/student/grade", handlers.APIHandlerInsertGrade)
+
+		// For each POST, we will enqueue a task to process the student grade
+		routing.POST("/student/grade", func(c *gin.Context) {
+			var grade model.Grade
+			if err := c.ShouldBindJSON(&grade); err != nil {
+				c.JSON(400, gin.H{"error": "Invalid input"})
+				return
+			}
+
+			// Enqueue the task to add student grade
+			handlers.EnqueueAddStadisticForStudent(c, enqueuer, grade)
+		})
+
+		routing.GET("/student/:student_id/course/:course_id", handlers.APIHandlerGetStatsForStudent)
 	}
 
 	// Lets log the server start

@@ -9,8 +9,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func APIHandlerInsertGrade(c *gin.Context) {
-	var grade model.Grade
+func APIHandlerInsertGrade( /*c *gin.Context*/ StudentGrade model.Grade) {
+
+	err := database.InsertGrade(StudentGrade)
+
+	if err != nil {
+		// Handle the error, e.g., log it and return an error response
+		log.Printf("Error inserting grade with data %v: %v", StudentGrade, err)
+		return
+	}
+
+	/*var grade model.Grade
 
 	// Bind the JSON request to the Grade struct
 	if err := c.ShouldBindJSON(&grade); err != nil {
@@ -27,12 +36,13 @@ func APIHandlerInsertGrade(c *gin.Context) {
 
 	log.Printf("Grade inserted successfully: %+v", grade)
 
-	c.JSON(http.StatusOK, gin.H{"result": "Grade inserted successfully", "status": http.StatusOK})
+	c.JSON(http.StatusOK, gin.H{"result": "Grade inserted successfully", "status": http.StatusOK})*/
 }
 
-func APIHandlerGetAvgGradeForStudent(c *gin.Context) {
-	studentID := c.Query("student_id")
-	courseID := c.Query("course_id")
+func APIHandlerGetStatsForStudent(c *gin.Context) {
+	studentID := c.Param("student_id")
+	courseID := c.Param("course_id")
+
 	if studentID == "" || courseID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"result": "Missing student_id query parameter", "status": http.StatusBadRequest})
 		return
@@ -44,7 +54,11 @@ func APIHandlerGetAvgGradeForStudent(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Average grade for student %s: %f", studentID, avgGrade)
-
-	c.JSON(http.StatusOK, gin.H{"average_grade": avgGrade, "status": http.StatusOK})
+	c.JSON(http.StatusOK, gin.H{
+		"result": gin.H{
+			"average_grade": avgGrade,
+			"tbd":           0.0,
+		},
+		"course_id": courseID,
+	})
 }
