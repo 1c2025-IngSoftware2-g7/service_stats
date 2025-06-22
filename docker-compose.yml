@@ -7,10 +7,15 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       - SERVICE_STATS_POSTGRES_URL=${SERVICE_STATS_POSTGRES_URL}
+      - ASYNC_QUEUE_HOST=${ASYNC_QUEUE_HOST}
+      - ASYNC_QUEUE_PORT=${ASYNC_QUEUE_PORT}
+      - GIN_MODE=debug
 
   service_stats_queue_worker:
     build:
