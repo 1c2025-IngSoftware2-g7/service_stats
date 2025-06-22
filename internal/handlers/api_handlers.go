@@ -7,6 +7,7 @@ import (
 	"service_stats/internal/model"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func APIHandlerInsertGrade( /*c *gin.Context*/ StudentGrade model.Grade) {
@@ -19,24 +20,26 @@ func APIHandlerInsertGrade( /*c *gin.Context*/ StudentGrade model.Grade) {
 		return
 	}
 
-	/*var grade model.Grade
+	/*
+		Lo dejo como schema para el futuro
+		var grade model.Grade
 
-	// Bind the JSON request to the Grade struct
-	if err := c.ShouldBindJSON(&grade); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid input", "status": http.StatusBadRequest})
-		return
-	}
+		// Bind the JSON request to the Grade struct
+		if err := c.ShouldBindJSON(&grade); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid input", "status": http.StatusBadRequest})
+			return
+		}
 
-	// Insert the grade into the database
-	err := database.InsertGrade(grade)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"result": "Failed to insert grade", "status": http.StatusInternalServerError})
-		return
-	}
+		// Insert the grade into the database
+		err := database.InsertGrade(grade)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"result": "Failed to insert grade", "status": http.StatusInternalServerError})
+			return
+		}
 
-	log.Printf("Grade inserted successfully: %+v", grade)
+		log.Printf("Grade inserted successfully: %+v", grade)
 
-	c.JSON(http.StatusOK, gin.H{"result": "Grade inserted successfully", "status": http.StatusOK})*/
+		c.JSON(http.StatusOK, gin.H{"result": "Grade inserted successfully", "status": http.StatusOK})*/
 }
 
 func APIHandlerGetStatsForStudent(c *gin.Context) {
@@ -48,13 +51,27 @@ func APIHandlerGetStatsForStudent(c *gin.Context) {
 		return
 	}
 
-	avgGrade, err := database.GetAvgGradeForStudent(studentID, courseID)
+	// Lets check if studenID and courseID are a valid UUID
+	if _, err := uuid.Parse(studentID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid student_id format (not an UUID value)", "status": http.StatusBadRequest})
+	}
+
+	if _, err := uuid.Parse(courseID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid course_id format (not an UUID value)", "status": http.StatusBadRequest})
+	}
+
+	avgGrade, err, code := database.GetAvgGradeForStudent(studentID, courseID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"result": "Failed to get average grade", "status": http.StatusInternalServerError})
+		c.JSON(code, gin.H{"result": "Failed to get average grade", "status": http.StatusInternalServerError})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	if code == http.StatusNotFound {
+		c.JSON(code, gin.H{"result": "No grades found for the student in the course", "status": http.StatusNotFound})
+		return
+	}
+
+	c.JSON(code, gin.H{
 		"result": gin.H{
 			"average_grade": avgGrade,
 			"tbd":           0.0,
