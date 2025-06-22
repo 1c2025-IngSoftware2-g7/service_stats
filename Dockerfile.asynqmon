@@ -1,0 +1,20 @@
+# Use a minimal Go image to build the binary
+FROM golang:1.24 as builder
+
+# Set the working directory
+WORKDIR /app
+
+RUN go install github.com/hibiken/asynqmon@latest
+
+FROM debian:bullseye-slim
+
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Copy the asynqmon binary from the builder
+COPY --from=builder /go/bin/asynqmon /usr/local/bin/asynqmon
+
+# Expose the port where asynqmon serves the UI
+EXPOSE 2222
+
+# Default command (change Redis address if needed)
+CMD ["asynqmon", "-redis-addr=redis:6379", "--port 2222"]
