@@ -9,8 +9,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func APIHandlerInsertGrade(c *gin.Context) {
-	var grade model.Grade
+func APIHandlerInsertGrade( /*c *gin.Context*/ StudentGrade model.Grade) {
+
+	err := database.InsertGrade(StudentGrade)
+
+	if err != nil {
+		// Handle the error, e.g., log it and return an error response
+		log.Printf("Error inserting grade with data %v: %v", StudentGrade, err)
+		return
+	}
+
+	/*var grade model.Grade
 
 	// Bind the JSON request to the Grade struct
 	if err := c.ShouldBindJSON(&grade); err != nil {
@@ -27,7 +36,7 @@ func APIHandlerInsertGrade(c *gin.Context) {
 
 	log.Printf("Grade inserted successfully: %+v", grade)
 
-	c.JSON(http.StatusOK, gin.H{"result": "Grade inserted successfully", "status": http.StatusOK})
+	c.JSON(http.StatusOK, gin.H{"result": "Grade inserted successfully", "status": http.StatusOK})*/
 }
 
 func APIHandlerGetStatsForStudent(c *gin.Context) {
