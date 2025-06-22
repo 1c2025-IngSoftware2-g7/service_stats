@@ -62,7 +62,7 @@ func main() {
 
 	// Initialize the database connection with internal/database/db.go
 
-	log.Printf("[Worker queue] Initializing database connection to [%s]", database_url)
+	log.Printf("[Main APP] Initializing database connection to [%s]", database_url)
 	err := database.InitDB(database_url)
 
 	if err != nil {

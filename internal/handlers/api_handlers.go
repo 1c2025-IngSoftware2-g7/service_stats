@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/hex"
 	"log"
 	"net/http"
 	"service_stats/internal/database"
@@ -9,6 +10,16 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+func isValidObjectID(id string) bool {
+	if len(id) != 24 {
+		return false
+	}
+
+	_, err := hex.DecodeString(id)
+
+	return err == nil
+}
 
 func APIHandlerInsertGrade( /*c *gin.Context*/ StudentGrade model.Grade) {
 
@@ -54,10 +65,12 @@ func APIHandlerGetStatsForStudent(c *gin.Context) {
 	// Lets check if studenID and courseID are a valid UUID
 	if _, err := uuid.Parse(studentID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid student_id format (not an UUID value)", "status": http.StatusBadRequest})
+		return
 	}
 
-	if _, err := uuid.Parse(courseID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid course_id format (not an UUID value)", "status": http.StatusBadRequest})
+	if !isValidObjectID(courseID) {
+		c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid course_id format (not a valid ObjectID)", "status": http.StatusBadRequest})
+		return
 	}
 
 	avgGrade, err, code := database.GetAvgGradeForStudent(studentID, courseID)
