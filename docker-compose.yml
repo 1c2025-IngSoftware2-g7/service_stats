@@ -24,8 +24,8 @@ services:
       service_stats:
         condition: service_started
     environment:
-      - ASYNC_QUEUE_HOST=redis
-      - ASYNC_QUEUE_PORT=6379
+      - ASYNC_QUEUE_HOST=${ASYNC_QUEUE_HOST}
+      - ASYNC_QUEUE_PORT=${ASYNC_QUEUE_PORT}
 
   postgres:
     image: postgres:14
