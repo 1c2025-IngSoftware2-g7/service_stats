@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    uses: ./.github/workflows/deploy-template.yml
+    uses: ./.github/workflows/deploy-gke.yml
     with:
       service-name: api-stats
       docker-context: .
