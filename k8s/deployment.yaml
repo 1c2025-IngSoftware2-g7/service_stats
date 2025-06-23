@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-stats
+  labels:
+    app: api-stats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-stats
+  template:
+    metadata:
+      labels:
+        app: api-stats
+    spec:
+      containers:
+        - name: api-stats
+          image: us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1
+          ports:
+            - containerPort: 8080
+          imagePullPolicy: Always
