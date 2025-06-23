@@ -13,3 +13,8 @@ jobs:
       docker-context: .
       docker-tag: v1
       k8s-path: k8s
+    secrets:
+      GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
+      GKE_ZONE: ${{ secrets.GKE_ZONE }}
