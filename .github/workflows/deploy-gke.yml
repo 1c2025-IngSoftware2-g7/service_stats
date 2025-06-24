@@ -37,7 +37,7 @@ jobs:
 
     - name: Build and push images
       run: |
-        docker compose -f docker-compose.yml build --no-cache
+        docker compose -f docker-compose.yml build
         
         docker images
         
@@ -45,9 +45,9 @@ jobs:
         WORKER_IMAGE="us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:$IMAGE_TAG"
         ASYNQMON_IMAGE="us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/asynqmon:$IMAGE_TAG"
         
-        docker tag service_stats_service_stats "$STATS_IMAGE"
-        docker tag service_stats_service_stats_queue_worker "$WORKER_IMAGE"
-        docker tag service_stats_asynqmon "$ASYNQMON_IMAGE"
+        docker tag service_stats-service_stats "$STATS_IMAGE"
+        docker tag service_stats-service_stats_queue_worker "$WORKER_IMAGE"
+        docker tag service_stats-asynqmon "$ASYNQMON_IMAGE"
         
         docker push "$STATS_IMAGE"
         docker push "$WORKER_IMAGE"
