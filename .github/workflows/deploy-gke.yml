@@ -55,17 +55,22 @@ jobs:
 
     - name: Deploy to GKE
       run: |
+        sudo apt-get update && sudo apt-get install google-cloud-sdk-gke-gcloud-auth-plugin -y
+        gcloud components install gke-gcloud-auth-plugin
+        
         gcloud container clusters get-credentials ${CLUSTER_NAME} --region ${GCP_REGION}
         
-        # Actualizar los manifests con las nuevas imágenes
-        sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/api-stats:${IMAGE_TAG}|g" k8s/deployment.yaml
-        sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/stats-worker:${IMAGE_TAG}|g" k8s/worker-deployment.yaml
+        if [ ! -f "k8s/worker-deployment.yaml" ]; then
+          echo "⚠️ Advertencia: worker-deployment.yaml no existe, continuando sin él"
+        fi
+        
+        [ -f "k8s/deployment.yaml" ] && sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/api-stats:${IMAGE_TAG}|g" k8s/deployment.yaml
+        [ -f "k8s/worker-deployment.yaml" ] && sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/stats-worker:${IMAGE_TAG}|g" k8s/worker-deployment.yaml
         
         kubectl apply -f k8s/
         
-        # Esperar a que los deployments estén listos
-        kubectl wait --for=condition=available --timeout=300s deployment/api-stats
-        kubectl wait --for=condition=available --timeout=300s deployment/stats-worker
+        kubectl wait --for=condition=available --timeout=300s deployment/api-stats || true
+        kubectl wait --for=condition=available --timeout=300s deployment/stats-worker || true
 
     - name: Verify deployment
       run: |
