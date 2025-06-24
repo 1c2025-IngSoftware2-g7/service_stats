@@ -55,22 +55,26 @@ jobs:
 
     - name: Deploy to GKE
       run: |
-        sudo apt-get update && sudo apt-get install google-cloud-sdk-gke-gcloud-auth-plugin -y
-        gcloud components install gke-gcloud-auth-plugin
-        
+        echo "Instalando gke-gcloud-auth-plugin..."
+        sudo apt-get update
+        sudo apt-get install -y apt-transport-https ca-certificates gnupg
+        echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+        curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+        sudo apt-get update && sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
+
+        echo "Configurando acceso al cluster..."
         gcloud container clusters get-credentials ${CLUSTER_NAME} --region ${GCP_REGION}
-        
-        if [ ! -f "k8s/worker-deployment.yaml" ]; then
-          echo "⚠️ Advertencia: worker-deployment.yaml no existe, continuando sin él"
-        fi
-        
+
+        echo "Actualizando manifests..."
         [ -f "k8s/deployment.yaml" ] && sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/api-stats:${IMAGE_TAG}|g" k8s/deployment.yaml
         [ -f "k8s/worker-deployment.yaml" ] && sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/stats-worker:${IMAGE_TAG}|g" k8s/worker-deployment.yaml
-        
+
+        echo "Aplicando configuración en GKE..."
         kubectl apply -f k8s/
-        
-        kubectl wait --for=condition=available --timeout=300s deployment/api-stats || true
-        kubectl wait --for=condition=available --timeout=300s deployment/stats-worker || true
+
+        echo "Esperando que los deployments estén listos..."
+        kubectl wait --for=condition=available --timeout=300s deployment/api-stats || echo "Deployment api-stats no encontrado"
+        kubectl wait --for=condition=available --timeout=300s deployment/stats-worker || echo "Deployment stats-worker no encontrado"
 
     - name: Verify deployment
       run: |
