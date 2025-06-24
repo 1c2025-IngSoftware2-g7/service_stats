@@ -20,3 +20,14 @@ spec:
           ports:
             - containerPort: 8080
           imagePullPolicy: Always
+          env:
+            - name: SERVICE_STATS_POSTGRES_URL
+              value: "host=postgres port=5432 user=postgres password=postgres dbname=db_stats sslmode=disable"
+            - name: NEW_RELIC_LICENSE_KEY
+              value: "660128f2db4928bcddbbd4976fd21768FFFFNRAL"
+            - name: NEW_RELIC_APP_NAME
+              value: "service_stats"
+            - name: ASYNC_QUEUE_HOST
+              value: "redis"
+            - name: ASYNC_QUEUE_PORT
+              value: "6379"
