@@ -23,7 +23,6 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    # Autenticación con GCP
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v1
         with:
@@ -32,12 +31,10 @@ jobs:
     - name: Set up gcloud CLI
       uses: google-github-actions/setup-gcloud@v1
 
-    # Configurar Docker para Artifact Registry
     - name: Configure Docker
       run: |
         gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev
 
-    # Construir y subir imágenes
     - name: Build and push images
       run: |
         docker-compose -f docker-compose.yml build
@@ -50,7 +47,6 @@ jobs:
         docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/stats-worker:${IMAGE_TAG}
         docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/asynqmon:${IMAGE_TAG}
 
-    # Desplegar en GKE
     - name: Deploy to GKE
       run: |
         gcloud container clusters get-credentials ${CLUSTER_NAME} --region ${GCP_REGION}
@@ -65,7 +61,6 @@ jobs:
         kubectl wait --for=condition=available --timeout=300s deployment/api-stats
         kubectl wait --for=condition=available --timeout=300s deployment/stats-worker
 
-    # Verificar el despliegue
     - name: Verify deployment
       run: |
         kubectl get pods
