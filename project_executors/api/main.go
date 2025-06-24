@@ -10,7 +10,7 @@ import (
 	"service_stats/internal/queue"
 
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
+	//"github.com/joho/godotenv"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
 

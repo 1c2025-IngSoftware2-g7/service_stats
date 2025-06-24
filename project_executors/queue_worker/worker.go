@@ -9,7 +9,7 @@ import (
 	"service_stats/internal/queue"
 
 	"github.com/hibiken/asynq"
-	"github.com/joho/godotenv"
+	// "github.com/joho/godotenv"
 )
 
 func main() {
