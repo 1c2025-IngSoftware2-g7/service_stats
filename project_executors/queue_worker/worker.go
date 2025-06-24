@@ -14,10 +14,10 @@ import (
 
 func main() {
 	// Load environment variables from .env file
-	err_env := godotenv.Load()
-	if err_env != nil {
-		log.Fatal("[Worker queue] Error loading .env file: ", err_env)
-	}
+	// err_env := godotenv.Load()
+	// if err_env != nil {
+	// 	log.Fatal("[Worker queue] Error loading .env file: ", err_env)
+	// }
 
 	database_url := os.Getenv("SERVICE_STATS_POSTGRES_URL")
 

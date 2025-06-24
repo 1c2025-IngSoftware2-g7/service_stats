@@ -17,11 +17,11 @@ import (
 func main() {
 
 	// Load environment variables from .env file
-	err_env := godotenv.Load()
+	// err_env := godotenv.Load()
 
-	if err_env != nil {
-		log.Fatal("[Stats Service] Error loading .env file: ", err_env)
-	}
+	// if err_env != nil {
+	// 	log.Fatal("[Stats Service] Error loading .env file: ", err_env)
+	// }
 
 	// Initialize New Relic
 	newRelicApp, err_relic := newrelic.NewApplication(
