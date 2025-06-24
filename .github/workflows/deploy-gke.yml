@@ -1,20 +1,72 @@
-name: Deploy Stats Service on GKE
+name: Deploy Stats Stack to GKE
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GCP_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: us-central1
+  ARTIFACT_REGISTRY: ${{ secrets.ARTIFACT_REGISTRY }}
+  CLUSTER_NAME: ${{ secrets.GKE_CLUSTER }}
+  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  deploy:
-    uses: 1c2025-IngSoftware2-g7/ci_templates/.github/workflows/deploy-gke.yml@main
-    with:
-      service-name: api-stats
-      docker-context: .
-      docker-tag: v1
-      k8s-path: k8s
-    secrets:
-      GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
-      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-      GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
-      GKE_ZONE: ${{ secrets.GKE_ZONE }}
+  setup-build-push-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # Autenticación con GCP
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+    - name: Set up gcloud CLI
+      uses: google-github-actions/setup-gcloud@v1
+
+    # Configurar Docker para Artifact Registry
+    - name: Configure Docker
+      run: |
+        gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev
+
+    # Construir y subir imágenes
+    - name: Build and push images
+      run: |
+        docker-compose -f docker-compose.yml build
+        
+        docker tag service_stats ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/api-stats:${IMAGE_TAG}
+        docker tag service_stats_queue_worker ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/stats-worker:${IMAGE_TAG}
+        docker tag asynqmon ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/asynqmon:${IMAGE_TAG}
+        
+        docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/api-stats:${IMAGE_TAG}
+        docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/stats-worker:${IMAGE_TAG}
+        docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/asynqmon:${IMAGE_TAG}
+
+    # Desplegar en GKE
+    - name: Deploy to GKE
+      run: |
+        gcloud container clusters get-credentials ${CLUSTER_NAME} --region ${GCP_REGION}
+        
+        # Actualizar los manifests con las nuevas imágenes
+        sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/api-stats:${IMAGE_TAG}|g" k8s/deployment.yaml
+        sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/stats-worker:${IMAGE_TAG}|g" k8s/worker-deployment.yaml
+        
+        kubectl apply -f k8s/
+        
+        # Esperar a que los deployments estén listos
+        kubectl wait --for=condition=available --timeout=300s deployment/api-stats
+        kubectl wait --for=condition=available --timeout=300s deployment/stats-worker
+
+    # Verificar el despliegue
+    - name: Verify deployment
+      run: |
+        kubectl get pods
+        kubectl get services
