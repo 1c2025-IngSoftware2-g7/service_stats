@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 type Grade struct {
 	StudentID string  `json:"student_id" binding:"required"`
 	CourseID  string  `json:"course_id" binding:"required"`
