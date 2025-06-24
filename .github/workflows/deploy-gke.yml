@@ -37,15 +37,21 @@ jobs:
 
     - name: Build and push images
       run: |
-        docker compose -f docker-compose.yml build
+        docker compose -f docker-compose.yml build --no-cache
         
-        docker tag service_stats ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/api-stats:${IMAGE_TAG}
-        docker tag service_stats_queue_worker ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/stats-worker:${IMAGE_TAG}
-        docker tag asynqmon ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/asynqmon:${IMAGE_TAG}
+        docker images
         
-        docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/api-stats:${IMAGE_TAG}
-        docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/stats-worker:${IMAGE_TAG}
-        docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/asynqmon:${IMAGE_TAG}
+        STATS_IMAGE="us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/api-stats:$IMAGE_TAG"
+        WORKER_IMAGE="us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:$IMAGE_TAG"
+        ASYNQMON_IMAGE="us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/asynqmon:$IMAGE_TAG"
+        
+        docker tag service_stats_service_stats "$STATS_IMAGE"
+        docker tag service_stats_service_stats_queue_worker "$WORKER_IMAGE"
+        docker tag service_stats_asynqmon "$ASYNQMON_IMAGE"
+        
+        docker push "$STATS_IMAGE"
+        docker push "$WORKER_IMAGE"
+        docker push "$ASYNQMON_IMAGE"
 
     - name: Deploy to GKE
       run: |
