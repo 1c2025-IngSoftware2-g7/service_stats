@@ -31,7 +31,8 @@ func InitDB(posgresUrl string) error {
     student_id UUID NOT NULL,
     course_id  UUID NOT NULL,
     grade      NUMERIC NOT NULL,
-    on_time    BOOLEAN NOT NULL DEFAULT TRUE
+    on_time    BOOLEAN NOT NULL DEFAULT TRUE,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);
 	`
 	_, err = DB.Exec(statement)
@@ -73,4 +74,118 @@ func GetAvgGradeForStudent(studentID string, courseID string) (float64, error, i
 
 	// Best case scenario, we return the average grade
 	return avgGrade, nil, http.StatusOK
+}
+
+// Función para obtener promedios de estudiante por período
+func GetStudentAveragesOverTime(studentID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
+    var query string
+    var args []interface{}
+    
+    baseQuery := `
+        SELECT 
+            DATE_TRUNC($1, created_at) AS period,
+            AVG(grade) AS average_grade,
+            COUNT(*) AS grade_count
+        FROM grades
+        WHERE student_id = $2
+    `
+
+    args = append(args, groupBy, studentID)
+    argPos := 3
+
+    if !startTime.IsZero() {
+        baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
+        args = append(args, startTime)
+        argPos++
+    }
+
+    if !endTime.IsZero() {
+        baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
+        args = append(args, endTime)
+        argPos++
+    }
+
+    query = baseQuery + " GROUP BY period ORDER BY period"
+
+    rows, err := DB.Query(query, args...)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var results []map[string]interface{}
+    for rows.Next() {
+        var period time.Time
+        var avgGrade float64
+        var count int
+        
+        if err := rows.Scan(&period, &avgGrade, &count); err != nil {
+            return nil, err
+        }
+
+        results = append(results, map[string]interface{}{
+            "period":        period.Format(time.RFC3339),
+            "average_grade": avgGrade,
+            "grade_count":   count,
+        })
+    }
+
+    return results, nil
+}
+
+// Función para obtener promedios de cursos por período
+func GetCourseAveragesOverTime(courseID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
+    var query string
+    var args []interface{}
+    
+    baseQuery := `
+        SELECT 
+            DATE_TRUNC($1, created_at) AS period,
+            AVG(grade) AS average_grade,
+            COUNT(*) AS grade_count
+        FROM grades
+        WHERE course_id = $2
+    `
+
+    args = append(args, groupBy, courseID)
+    argPos := 3
+
+    if !startTime.IsZero() {
+        baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
+        args = append(args, startTime)
+        argPos++
+    }
+
+    if !endTime.IsZero() {
+        baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
+        args = append(args, endTime)
+        argPos++
+    }
+
+    query = baseQuery + " GROUP BY period ORDER BY period"
+
+    rows, err := DB.Query(query, args...)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var results []map[string]interface{}
+    for rows.Next() {
+        var period time.Time
+        var avgGrade float64
+        var count int
+        
+        if err := rows.Scan(&period, &avgGrade, &count); err != nil {
+            return nil, err
+        }
+
+        results = append(results, map[string]interface{}{
+            "period":        period.Format(time.RFC3339),
+            "average_grade": avgGrade,
+            "grade_count":   count,
+        })
+    }
+
+    return results, nil
 }

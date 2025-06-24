@@ -89,6 +89,11 @@ func main() {
 		})
 
 		routing.GET("/student/:student_id/course/:course_id", handlers.APIHandlerGetStatsForStudent)
+
+		// Endpoints individuales
+		routing.GET("/student/:student_id/average", handlers.APIHandlerGetStudentAverageOverTime)
+    	routing.GET("/course/:course_id/average", handlers.APIHandlerGetCourseAverageOverTime)
+
 	}
 
 	// Lets log the server start
