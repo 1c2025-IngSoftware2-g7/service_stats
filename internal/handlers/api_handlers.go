@@ -180,14 +180,14 @@ func APIHandlerGetCourseAverageOverTime(c *gin.Context) {
         return
     }
 
-    averages, err := database.GetStudentAveragesOverTime(courseID, startTime, endTime, req.GroupBy)
+    averages, err := database.GetCourseAveragesOverTime(courseID, startTime, endTime, req.GroupBy)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
         return
     }
 
     c.JSON(http.StatusOK, gin.H{
-        "student_id": courseID,
+        "course_id": courseID,
         "averages":   averages,
         "time_range": gin.H{
             "start": startTime.Format(time.RFC3339),
