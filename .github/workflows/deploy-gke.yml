@@ -39,21 +39,21 @@ jobs:
       run: |
         docker compose -f docker-compose.yml build
         
-        docker tag service_stats ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/api-stats:${IMAGE_TAG}
-        docker tag service_stats_queue_worker ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/stats-worker:${IMAGE_TAG}
-        docker tag asynqmon ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/asynqmon:${IMAGE_TAG}
+        docker tag service_stats ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/api-stats:${IMAGE_TAG}
+        docker tag service_stats_queue_worker ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/stats-worker:${IMAGE_TAG}
+        docker tag asynqmon ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/asynqmon:${IMAGE_TAG}
         
         docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/api-stats:${IMAGE_TAG}
-        docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/stats-worker:${IMAGE_TAG}
-        docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/asynqmon:${IMAGE_TAG}
+        docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/stats-worker:${IMAGE_TAG}
+        docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/asynqmon:${IMAGE_TAG}
 
     - name: Deploy to GKE
       run: |
         gcloud container clusters get-credentials ${CLUSTER_NAME} --region ${GCP_REGION}
         
         # Actualizar los manifests con las nuevas imágenes
-        sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/api-stats:${IMAGE_TAG}|g" k8s/deployment.yaml
-        sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${ARTIFACT_REGISTRY}/stats-worker:${IMAGE_TAG}|g" k8s/worker-deployment.yaml
+        sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/api-stats:${IMAGE_TAG}|g" k8s/deployment.yaml
+        sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/stats-worker:${IMAGE_TAG}|g" k8s/worker-deployment.yaml
         
         kubectl apply -f k8s/
         
