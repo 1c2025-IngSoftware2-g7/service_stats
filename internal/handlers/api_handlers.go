@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"service_stats/internal/database"
 	"service_stats/internal/model"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -91,4 +92,107 @@ func APIHandlerGetStatsForStudent(c *gin.Context) {
 		},
 		"course_id": courseID,
 	})
+}
+
+
+// Estructuras para las requests
+type TimeRangeRequest struct {
+    StartDate  string `form:"start_date"`
+    EndDate    string `form:"end_date"`
+    GroupBy    string `form:"group_by"` // "day", "week", "month", "quarter", "year"
+}
+
+// Helper function para parsear fechas
+func parseTimeRange(start, end string) (time.Time, time.Time, error) {
+    layout := "2006-01-02" // Formato YYYY-MM-DD
+    var startTime, endTime time.Time
+    var err error
+
+    if start != "" {
+        startTime, err = time.Parse(layout, start)
+        if err != nil {
+            return time.Time{}, time.Time{}, err
+        }
+    } else {
+        startTime = time.Time{} // Cero value para indicar "sin límite"
+    }
+
+    if end != "" {
+        endTime, err = time.Parse(layout, end)
+        if err != nil {
+            return time.Time{}, time.Time{}, err
+        }
+        // Ajustamos para incluir todo el día final
+        endTime = endTime.Add(24 * time.Hour - time.Nanosecond)
+    } else {
+        endTime = time.Now()
+    }
+
+    return startTime, endTime, nil
+}
+
+// Handler para promedio de estudiante
+func APIHandlerGetStudentAverageOverTime(c *gin.Context) {
+    studentID := c.Param("student_id")
+    var req TimeRangeRequest
+    
+    if err := c.ShouldBindQuery(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
+        return
+    }
+
+    startTime, endTime, err := parseTimeRange(req.StartDate, req.EndDate)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
+        return
+    }
+
+    averages, err := database.GetStudentAveragesOverTime(studentID, startTime, endTime, req.GroupBy)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "student_id": studentID,
+        "averages":   averages,
+        "time_range": gin.H{
+            "start": startTime.Format(time.RFC3339),
+            "end":   endTime.Format(time.RFC3339),
+        },
+        "group_by": req.GroupBy,
+    })
+}
+
+// Handler para promedio de curso (similar al anterior pero para cursos)
+func APIHandlerGetCourseAverageOverTime(c *gin.Context) {
+    courseID := c.Param("course_id")
+    var req TimeRangeRequest
+    
+    if err := c.ShouldBindQuery(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
+        return
+    }
+
+    startTime, endTime, err := parseTimeRange(req.StartDate, req.EndDate)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
+        return
+    }
+
+    averages, err := database.GetCourseAveragesOverTime(courseID, startTime, endTime, req.GroupBy)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "course_id": courseID,
+        "averages":   averages,
+        "time_range": gin.H{
+            "start": startTime.Format(time.RFC3339),
+            "end":   endTime.Format(time.RFC3339),
+        },
+        "group_by": req.GroupBy,
+    })
 }
