@@ -238,3 +238,60 @@ func GetAvgGradeTaskForStudent(studentID string, courseID string, taskID string)
 
     return avgGrade, nil, http.StatusOK
 }
+
+// GetStudentCourseTasksAverage devuelve el promedio de un estudiante en todas las tasks de un curso
+func GetStudentCourseTasksAverage(studentID string, courseID string) (float64, error, int) {
+    var avgGrade float64
+    statement := `SELECT AVG(grade) FROM grades_tasks
+                  WHERE student_id = $1 AND course_id = $2`
+
+    err := DB.QueryRow(statement, studentID, courseID).Scan(&avgGrade)
+
+    if err == sql.ErrNoRows {
+        return 0.0, nil, http.StatusNotFound
+    }
+    if err != nil {
+        return 0, err, http.StatusInternalServerError
+    }
+
+    return avgGrade, nil, http.StatusOK
+}
+
+// GetOtherStudentsCourseAverages devuelve los promedios de otros estudiantes en el curso
+func GetOtherStudentsCourseAverages(studentID string, courseID string) ([]map[string]interface{}, error) {
+    query := `
+        SELECT
+            student_id,
+            AVG(grade) as average_grade,
+            COUNT(*) as task_count
+        FROM grades_tasks
+        WHERE course_id = $1 AND student_id != $2
+        GROUP BY student_id
+        ORDER BY average_grade DESC
+    `
+
+    rows, err := DB.Query(query, courseID, studentID)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var results []map[string]interface{}
+    for rows.Next() {
+        var studentID string
+        var avgGrade float64
+        var taskCount int
+
+        if err := rows.Scan(&studentID, &avgGrade, &taskCount); err != nil {
+            return nil, err
+        }
+
+        results = append(results, map[string]interface{}{
+            "student_id":    studentID,
+            "average_grade": avgGrade,
+            "task_count":   taskCount,
+        })
+    }
+
+    return results, nil
+}

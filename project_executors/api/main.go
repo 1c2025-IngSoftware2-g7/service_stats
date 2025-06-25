@@ -102,7 +102,9 @@ func main() {
 			}
 			handlers.EnqueueAddGradeTask(c, enqueuer, gradeTask)
 
-		routing.GET("/student/:student_id/course/:course_id/task/:task_id", handlers.APIHandlerGetStatsForStudentTask)
+		//routing.GET("/student/:student_id/course/:course_id/task/:task_id", handlers.APIHandlerGetStatsForStudentTask)
+
+		routing.GET("/student/:student_id/course/:course_id/task/average", handlers.APIHandlerGetStudentCourseTasksAverage)
     })
 	}
 
