@@ -196,3 +196,39 @@ func APIHandlerGetCourseAverageOverTime(c *gin.Context) {
         "group_by": req.GroupBy,
     })
 }
+
+func APIHandlerGetStatsForStudentTask(c *gin.Context) {
+    studentID := c.Param("student_id")
+    courseID := c.Param("course_id")
+    taskID := c.Param("task_id")
+
+    // Validaciones (similar a las que ya tienes)
+    if _, err := uuid.Parse(studentID); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid student_id format", "status": http.StatusBadRequest})
+        return
+    }
+
+    if !isValidObjectID(courseID) || !isValidObjectID(taskID) {
+        c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid course_id or task_id format", "status": http.StatusBadRequest})
+        return
+    }
+
+    avgGrade, err, code := database.GetAvgGradeTaskForStudent(studentID, courseID, taskID)
+    if err != nil {
+        c.JSON(code, gin.H{"result": "Failed to get average grade", "status": http.StatusInternalServerError})
+        return
+    }
+
+    if code == http.StatusNotFound {
+        c.JSON(code, gin.H{"result": "No grades found for the student in this task", "status": http.StatusNotFound})
+        return
+    }
+
+    c.JSON(code, gin.H{
+        "result": gin.H{
+            "average_grade": avgGrade,
+        },
+        "course_id": courseID,
+        "task_id":   taskID,
+    })
+}

@@ -22,3 +22,20 @@ func EnqueueAddStadisticForStudent(c *gin.Context, enqueuer *queue.Enqueuer, pay
 
 	c.JSON(http.StatusOK, gin.H{"result": fmt.Sprintf("Task %s queued sucessfully (Expected time to be processed: %.2f minutes)", taskType, expected_delay_in_sec.Minutes()), "status": http.StatusOK})
 }
+
+func EnqueueAddGradeTask(c *gin.Context, enqueuer *queue.Enqueuer, payload model.GradeTask) {
+    taskType := types.TaskAddStudentGradeTask
+
+    expected_delay_in_sec, err := enqueuer.Enqueue(taskType, payload)
+
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"result": "Failed to enqueue task", "status": http.StatusBadRequest})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "result": fmt.Sprintf("Task %s queued successfully (Expected time to be processed: %.2f minutes)", 
+                 taskType, expected_delay_in_sec.Minutes()),
+        "status": http.StatusOK,
+    })
+}

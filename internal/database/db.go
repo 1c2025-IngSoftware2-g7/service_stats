@@ -36,6 +36,16 @@ func InitDB(posgresUrl string) error {
     on_time    BOOLEAN NOT NULL DEFAULT TRUE,
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);
+
+    CREATE TABLE IF NOT EXISTS grades_tasks (
+        id SERIAL PRIMARY KEY,
+        student_id TEXT NOT NULL,
+        course_id  TEXT NOT NULL,
+        task_id    TEXT NOT NULL,
+        grade      NUMERIC NOT NULL,
+        on_time    BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
 	`
 	_, err = DB.Exec(statement)
 
@@ -190,4 +200,41 @@ func GetCourseAveragesOverTime(courseID string, startTime, endTime time.Time, gr
     }
 
     return results, nil
+}
+
+// InsertGradeTask inserts a new grade task into the database
+func InsertGradeTask(grade model.GradeTask) error {
+    statement := `INSERT INTO grades_tasks (student_id, course_id, task_id, grade, on_time)
+                  VALUES ($1, $2, $3, $4, $5)`
+    _, err := DB.Exec(statement, grade.StudentID, grade.CourseID, grade.TaskID, grade.Grade, grade.OnTime)
+
+    if err != nil {
+        log.Printf("[Service Stats] Error inserting grade task: %v", err)
+        return err
+    }
+
+    return nil
+}
+
+// GetAvgGradeTaskForStudent returns the average grade for a student in a specific task
+func GetAvgGradeTaskForStudent(studentID string, courseID string, taskID string) (float64, error, int) {
+    var avgGrade float64
+    statement := `SELECT AVG(grade) FROM grades_tasks
+                  WHERE student_id = $1 AND course_id = $2 AND task_id = $3
+                  GROUP BY student_id, course_id, task_id`
+
+    err := DB.QueryRow(statement, studentID, courseID, taskID).Scan(&avgGrade)
+
+    if err == sql.ErrNoRows {
+        log.Printf("[Service Stats] No grades found for student %s in course %s task %s",
+                   studentID, courseID, taskID)
+        return 0.0, nil, http.StatusNotFound
+    }
+
+    if err != nil {
+        log.Printf("[Service Stats] Error getting average grade for task: %v", err)
+        return 0, err, http.StatusInternalServerError
+    }
+
+    return avgGrade, nil, http.StatusOK
 }
