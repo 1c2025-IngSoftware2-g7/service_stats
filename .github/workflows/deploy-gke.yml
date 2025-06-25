@@ -76,6 +76,11 @@ jobs:
         kubectl wait --for=condition=available --timeout=300s deployment/api-stats || echo "Deployment api-stats no encontrado"
         kubectl wait --for=condition=available --timeout=300s deployment/stats-worker || echo "Deployment stats-worker no encontrado"
 
+        echo "Aplicando configuración en GKE..."
+        kubectl apply -f k8s/
+        kubectl apply -f k8s/redis-deployment.yaml
+        kubectl apply -f k8s/redis-service.yaml
+
     - name: Verify deployment
       run: |
         kubectl get pods

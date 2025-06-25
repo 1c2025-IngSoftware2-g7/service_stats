@@ -28,6 +28,6 @@ spec:
             - name: NEW_RELIC_APP_NAME
               value: "service_stats"
             - name: ASYNC_QUEUE_HOST
-              value: "redis"
+              value: "redis.default.svc.cluster.local"
             - name: ASYNC_QUEUE_PORT
               value: "6379"
