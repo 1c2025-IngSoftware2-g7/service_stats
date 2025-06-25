@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"encoding/hex"
+	"unicode"
 	"log"
 	"net/http"
 	"service_stats/internal/database"
@@ -12,14 +12,19 @@ import (
 	"github.com/google/uuid"
 )
 
+
 func isValidObjectID(id string) bool {
-	if len(id) != 24 {
-		return false
-	}
-
-	_, err := hex.DecodeString(id)
-
-	return err == nil
+    // Validación más flexible para course_id y task_id
+    if len(id) < 1 || len(id) > 50 {
+        return false
+    }
+    // Verifica que solo contenga caracteres alfanuméricos
+    for _, c := range id {
+        if !unicode.IsLetter(c) && !unicode.IsNumber(c) {
+            return false
+        }
+    }
+    return true
 }
 
 func APIHandlerInsertGrade( /*c *gin.Context*/ StudentGrade model.Grade) {
@@ -195,4 +200,84 @@ func APIHandlerGetCourseAverageOverTime(c *gin.Context) {
         },
         "group_by": req.GroupBy,
     })
+}
+
+func APIHandlerGetStatsForStudentTask(c *gin.Context) {
+    studentID := c.Param("student_id")
+    courseID := c.Param("course_id")
+    taskID := c.Param("task_id")
+
+    // Validaciones (similar a las que ya tienes)
+    if _, err := uuid.Parse(studentID); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid student_id format", "status": http.StatusBadRequest})
+        return
+    }
+
+    if !isValidObjectID(courseID) || !isValidObjectID(taskID) {
+        c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid course_id or task_id format", "status": http.StatusBadRequest})
+        return
+    }
+
+    avgGrade, err, code := database.GetAvgGradeTaskForStudent(studentID, courseID, taskID)
+    if err != nil {
+        c.JSON(code, gin.H{"result": "Failed to get average grade", "status": http.StatusInternalServerError})
+        return
+    }
+
+    if code == http.StatusNotFound {
+        c.JSON(code, gin.H{"result": "No grades found for the student in this task", "status": http.StatusNotFound})
+        return
+    }
+
+    c.JSON(code, gin.H{
+        "result": gin.H{
+            "average_grade": avgGrade,
+        },
+        "course_id": courseID,
+        "task_id":   taskID,
+    })
+}
+
+func APIHandlerGetStudentCourseTasksAverage(c *gin.Context) {
+    studentID := c.Param("student_id")
+    courseID := c.Param("course_id")
+
+    // Validaciones
+    if _, err := uuid.Parse(studentID); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid student_id format"})
+        return
+    }
+
+    if !isValidObjectID(courseID) {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course_id format"})
+        return
+    }
+
+    // Obtener promedio del estudiante solicitado
+    studentAvg, err, code := database.GetStudentCourseTasksAverage(studentID, courseID)
+    if err != nil {
+        c.JSON(code, gin.H{"error": err.Error()})
+        return
+    }
+
+    // Obtener promedios de otros estudiantes
+    otherStudents, err := database.GetOtherStudentsCourseAverages(studentID, courseID)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    // Construir respuesta
+    response := gin.H{
+        "student_id":          studentID,
+        "course_id":           courseID,
+        "student_average":     studentAvg,
+        "other_students":      otherStudents,
+    }
+
+    if code == http.StatusNotFound {
+        response["warning"] = "No grades found for the requested student"
+    }
+
+    c.JSON(http.StatusOK, response)
 }

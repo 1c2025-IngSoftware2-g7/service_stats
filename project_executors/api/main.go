@@ -94,6 +94,18 @@ func main() {
 		routing.GET("/student/:student_id/average", handlers.APIHandlerGetStudentAverageOverTime)
     	routing.GET("/course/:course_id/average", handlers.APIHandlerGetCourseAverageOverTime)
 
+		routing.POST("/student/task/grade", func(c *gin.Context) {
+			var gradeTask model.GradeTask
+			if err := c.ShouldBindJSON(&gradeTask); err != nil {
+				c.JSON(400, gin.H{"error": "Invalid input"})
+				return
+			}
+			handlers.EnqueueAddGradeTask(c, enqueuer, gradeTask)
+
+		//routing.GET("/student/:student_id/course/:course_id/task/:task_id", handlers.APIHandlerGetStatsForStudentTask)
+
+		routing.GET("/student/:student_id/course/:course_id/task/average", handlers.APIHandlerGetStudentCourseTasksAverage)
+    })
 	}
 
 	// Lets log the server start

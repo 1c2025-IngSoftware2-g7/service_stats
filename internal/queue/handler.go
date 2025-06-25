@@ -14,11 +14,10 @@ import (
 )
 
 func NewMux() *asynq.ServeMux {
-	mux := asynq.NewServeMux()
-
-	mux.HandleFunc(types.TaskAddStudentGrade, HandleAddStadisticForStudent)
-
-	return mux
+    mux := asynq.NewServeMux()
+    mux.HandleFunc(types.TaskAddStudentGrade, HandleAddStadisticForStudent)
+    mux.HandleFunc(types.TaskAddStudentGradeTask, HandleAddGradeTask)
+    return mux
 }
 
 func HandleAddStadisticForStudent(ctx context.Context, t *asynq.Task) error {
@@ -37,4 +36,21 @@ func HandleAddStadisticForStudent(ctx context.Context, t *asynq.Task) error {
 	}
 
 	return nil
+}
+
+func HandleAddGradeTask(ctx context.Context, t *asynq.Task) error {
+    var p model.GradeTask
+    if err := json.Unmarshal(t.Payload(), &p); err != nil {
+        return err
+    }
+
+    log.Printf("Processing grade task: %s with payload: %+v", t.Type(), p)
+
+    err := database.InsertGradeTask(p)
+    if err != nil {
+        log.Printf("Failed to insert grade task for %v: %v", p, err)
+        return err
+    }
+
+    return nil
 }

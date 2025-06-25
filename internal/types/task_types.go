@@ -11,3 +11,4 @@ package types
 And you're done! Regards lucas!
 */
 const TaskAddStudentGrade = "task:add_student_grade"
+const TaskAddStudentGradeTask = "task:add_student_grade_task"
