@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 
@@ -65,12 +64,6 @@ func APIHandlerGetStatsForStudent(c *gin.Context) {
 
 	if studentID == "" || courseID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"result": "Missing student_id query parameter", "status": http.StatusBadRequest})
-		return
-	}
-
-	// Lets check if studenID and courseID are a valid UUID
-	if _, err := uuid.Parse(studentID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid student_id format (not an UUID value)", "status": http.StatusBadRequest})
 		return
 	}
 
@@ -207,8 +200,7 @@ func APIHandlerGetStatsForStudentTask(c *gin.Context) {
     courseID := c.Param("course_id")
     taskID := c.Param("task_id")
 
-    // Validaciones (similar a las que ya tienes)
-    if _, err := uuid.Parse(studentID); err != nil {
+    if !isValidObjectID(studentID) {
         c.JSON(http.StatusBadRequest, gin.H{"result": "Invalid student_id format", "status": http.StatusBadRequest})
         return
     }
@@ -243,7 +235,7 @@ func APIHandlerGetStudentCourseTasksAverage(c *gin.Context) {
     courseID := c.Param("course_id")
 
     // Validaciones
-    if _, err := uuid.Parse(studentID); err != nil {
+    if !isValidObjectID(studentID) {
         c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid student_id format"})
         return
     }
@@ -280,4 +272,41 @@ func APIHandlerGetStudentCourseTasksAverage(c *gin.Context) {
     }
 
     c.JSON(http.StatusOK, response)
+}
+
+func APIHandlerGetTaskAverages(c *gin.Context) {
+    courseID := c.Param("course_id")
+    taskID := c.Param("task_id")
+
+    // Validación de course_id y task_id (ajusta según tus necesidades)
+    if len(courseID) < 1 || len(taskID) < 1 {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course_id or task_id format"})
+        return
+    }
+
+    averages, err := database.GetAveragesForTask(courseID, taskID)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    // Calcular promedio general del grupo
+    var totalSum float64
+    var totalCount int
+    for _, student := range averages {
+        totalSum += student["average_grade"].(float64) * float64(student["grade_count"].(int))
+        totalCount += student["grade_count"].(int)
+    }
+
+    groupAverage := 0.0
+    if totalCount > 0 {
+        groupAverage = totalSum / float64(totalCount)
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "course_id":     courseID,
+        "task_id":      taskID,
+        "group_average": groupAverage,
+        "students":      averages,
+    })
 }
