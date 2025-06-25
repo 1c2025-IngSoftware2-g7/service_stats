@@ -166,7 +166,7 @@ func APIHandlerGetStudentAverageOverTime(c *gin.Context) {
 
 // Handler para promedio de curso (similar al anterior pero para cursos)
 func APIHandlerGetCourseAverageOverTime(c *gin.Context) {
-    courseID := c.Param("student_id")
+    courseID := c.Param("course_id")
     var req TimeRangeRequest
     
     if err := c.ShouldBindQuery(&req); err != nil {
