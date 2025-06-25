@@ -30,7 +30,7 @@ func InitDB(posgresUrl string) error {
 
 	statement := `CREATE TABLE IF NOT EXISTS grades (
     id SERIAL PRIMARY KEY,
-    student_id UUID NOT NULL,
+    student_id TEXT NOT NULL,
     course_id  TEXT NOT NULL,
     grade      NUMERIC NOT NULL,
     on_time    BOOLEAN NOT NULL DEFAULT TRUE,
@@ -290,6 +290,45 @@ func GetOtherStudentsCourseAverages(studentID string, courseID string) ([]map[st
             "student_id":    studentID,
             "average_grade": avgGrade,
             "task_count":   taskCount,
+        })
+    }
+
+    return results, nil
+}
+
+// GetAveragesForTask devuelve los promedios de todos los estudiantes para una task específica
+func GetAveragesForTask(courseID string, taskID string) ([]map[string]interface{}, error) {
+    query := `
+        SELECT
+            student_id,
+            AVG(grade) as average_grade,
+            COUNT(*) as grade_count
+        FROM grades_tasks
+        WHERE course_id = $1 AND task_id = $2
+        GROUP BY student_id
+        ORDER BY average_grade DESC
+    `
+
+    rows, err := DB.Query(query, courseID, taskID)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var results []map[string]interface{}
+    for rows.Next() {
+        var studentID string
+        var avgGrade float64
+        var gradeCount int
+
+        if err := rows.Scan(&studentID, &avgGrade, &gradeCount); err != nil {
+            return nil, err
+        }
+
+        results = append(results, map[string]interface{}{
+            "student_id":    studentID,
+            "average_grade": avgGrade,
+            "grade_count":   gradeCount,
         })
     }
 

@@ -105,6 +105,8 @@ func main() {
 		//routing.GET("/student/:student_id/course/:course_id/task/:task_id", handlers.APIHandlerGetStatsForStudentTask)
 
 		routing.GET("/student/:student_id/course/:course_id/task/average", handlers.APIHandlerGetStudentCourseTasksAverage)
+
+		routing.GET("/course/:course_id/task/:task_id/averages", handlers.APIHandlerGetTaskAverages)
     })
 	}
 
