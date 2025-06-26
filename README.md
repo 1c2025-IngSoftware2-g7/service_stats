@@ -3,13 +3,14 @@
 ## Contenidos
 1. Introducción
 2. Arquitectura de componentes
-3. Pre-requisitos
+3. Pre-requisitos y detalles de arquitectura
 4. CI-CD
 5. Tests
 6. Comandos para construir la imagen de Docker
 7. Comandos para correr la base de datos
 8. Comandos para correr la imagen del servicio
 9. Despliegue en la Nube 
+10. Analisis postmortem
 
 ## 1. Introducción
 
@@ -28,7 +29,7 @@ El servicio consta de:
     - api main: Donde se hace un handler de cada endpoint para la obtencion/insersión de estádisticas
     - Worker: Aplicación exclusiva que se encarga de procesar las tareas previamente
 
-## 3. Pre-requisitos
+## 3. Pre-requisitos y detalles de arquitectura
 - Necesario para levantar el entorno de desarrollo de forma local:
     - [Docker](https://docs.docker.com/get-started/introduction/) (version 27.3.1) 
     - [Docker-compose](https://docs.docker.com/compose/install/) (version 2.30.3)
@@ -46,6 +47,8 @@ Adicionalmente, se menciona a continuación lo utilizado dentro de los contenedo
 
 - Base de datos:
     - PostgreSQL 14 (imagen oficial).
+
+En este microservicio intentamos ir por la idea de arquitectura de capas, donde la responsabilidad está distribuida, y sea la api o worker quien desea consumirlas, pueden acceder sin impedimentos.
 
 
 ## 4. CI-CD
@@ -88,3 +91,6 @@ En ```docker-compose.yml```:
 
 TBD
 
+## 10. Analisis postmortem
+
+A explicar mas llegado el momento.
