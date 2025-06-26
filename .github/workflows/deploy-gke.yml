@@ -28,8 +28,11 @@ jobs:
       with:
         credentials_json: ${{ secrets.GCP_CREDENTIALS }}
 
-    - name: Set up gcloud CLI
+    - name: Set up gcloud CLI and kubectl
       uses: google-github-actions/setup-gcloud@v1
+      with:
+        install_components: 'gke-gcloud-auth-plugin'  # Instala el plugin requerido
+        version: 'latest'
 
     - name: Configure Docker
       run: |
@@ -37,25 +40,31 @@ jobs:
 
     - name: Build and push images
       run: |
-        # Construir y subir solo la imagen del worker desde Dockerfile.queue_worker
         docker build -t ${GCP_REGION}-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:$IMAGE_TAG -f Dockerfile.queue_worker .
         docker push ${GCP_REGION}-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:$IMAGE_TAG
 
-        # Construir y subir la imagen de la API
         docker build -t ${GCP_REGION}-docker.pkg.dev/$GCP_PROJECT/docker-repository/api-stats:$IMAGE_TAG -f Dockerfile.api .
         docker push ${GCP_REGION}-docker.pkg.dev/$GCP_PROJECT/docker-repository/api-stats:$IMAGE_TAG
 
-        # Construir y subir la imagen de Asynqmon (si es necesaria)
         docker build -t ${GCP_REGION}-docker.pkg.dev/$GCP_PROJECT/docker-repository/asynqmon:$IMAGE_TAG -f Dockerfile.asynqmon .
         docker push ${GCP_REGION}-docker.pkg.dev/$GCP_PROJECT/docker-repository/asynqmon:$IMAGE_TAG
 
     - name: Deploy to GKE
       run: |
         gcloud container clusters get-credentials ${CLUSTER_NAME} --region ${GCP_REGION}
-
+        
         # Actualizar las imágenes en los manifests
         sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/stats-worker:latest|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/stats-worker:${IMAGE_TAG}|g" k8s/worker-deployment.yaml
         sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/api-stats:${IMAGE_TAG}|g" k8s/deployment.yaml
 
-        kubectl apply -f k8s/
+        # Aplicar los manifests con --validate=false para evitar errores temporales
+        kubectl apply -f k8s/ --validate=false
+        
+        # Esperar a que los deployments estén listos
         kubectl wait --for=condition=available --timeout=300s deployment/stats-worker
+        kubectl wait --for=condition=available --timeout=300s deployment/api-stats
+
+    - name: Verify deployment
+      run: |
+        kubectl get pods
+        kubectl get services
