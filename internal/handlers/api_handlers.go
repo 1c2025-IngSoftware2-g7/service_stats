@@ -310,3 +310,71 @@ func APIHandlerGetTaskAverages(c *gin.Context) {
         "students":      averages,
     })
 }
+
+// Handler para porcentaje de entregas a tiempo en un curso
+func APIHandlerGetCourseOnTimePercentage(c *gin.Context) {
+    courseID := c.Param("course_id")
+    var req TimeRangeRequest
+
+    if err := c.ShouldBindQuery(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
+        return
+    }
+
+    startTime, endTime, err := parseTimeRange(req.StartDate, req.EndDate)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
+        return
+    }
+
+    results, err := database.GetOnTimeSubmissionPercentageForCourse(courseID, startTime, endTime, req.GroupBy)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "course_id": courseID,
+        "data":      results,
+        "time_range": gin.H{
+            "start": startTime.Format(time.RFC3339),
+            "end":   endTime.Format(time.RFC3339),
+        },
+        "group_by": req.GroupBy,
+    })
+}
+
+// Handler para porcentaje de entregas a tiempo de un estudiante en un curso
+func APIHandlerGetStudentOnTimePercentage(c *gin.Context) {
+    courseID := c.Param("course_id")
+    studentID := c.Param("student_id")
+    var req TimeRangeRequest
+
+    if err := c.ShouldBindQuery(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
+        return
+    }
+
+    startTime, endTime, err := parseTimeRange(req.StartDate, req.EndDate)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
+        return
+    }
+
+    results, err := database.GetOnTimeSubmissionPercentageForStudent(courseID, studentID, startTime, endTime, req.GroupBy)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "course_id": courseID,
+        "student_id": studentID,
+        "data":      results,
+        "time_range": gin.H{
+            "start": startTime.Format(time.RFC3339),
+            "end":   endTime.Format(time.RFC3339),
+        },
+        "group_by": req.GroupBy,
+    })
+}

@@ -334,3 +334,180 @@ func GetAveragesForTask(courseID string, taskID string) ([]map[string]interface{
 
     return results, nil
 }
+
+func GetOnTimeSubmissionPercentageForCourse(courseID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
+    var query string
+    var args []interface{}
+
+    if groupBy == "" {
+        baseQuery := `
+            SELECT
+                'all_time' AS period,
+                COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
+                COUNT(*) AS total_count,
+                COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
+            FROM grades_tasks
+            WHERE course_id = $1
+        `
+        args = append(args, courseID)
+        argPos := 2
+
+        if !startTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
+            args = append(args, startTime)
+            argPos++
+        }
+
+        if !endTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
+            args = append(args, endTime)
+        }
+
+        query = baseQuery
+    } else {
+        baseQuery := `
+            SELECT
+                DATE_TRUNC($1, created_at) AS period,
+                COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
+                COUNT(*) AS total_count,
+                COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
+            FROM grades_tasks
+            WHERE course_id = $2
+        `
+
+        args = append(args, groupBy, courseID)
+        argPos := 3
+
+        if !startTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
+            args = append(args, startTime)
+            argPos++
+        }
+
+        if !endTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
+            args = append(args, endTime)
+        }
+
+        query = baseQuery + " GROUP BY period ORDER BY period"
+    }
+
+    rows, err := DB.Query(query, args...)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var results []map[string]interface{}
+    for rows.Next() {
+        var period interface{}
+        var onTimeCount, totalCount int
+        var percentage float64
+
+        if err := rows.Scan(&period, &onTimeCount, &totalCount, &percentage); err != nil {
+            return nil, err
+        }
+
+        if t, ok := period.(time.Time); ok {
+            period = t.Format(time.RFC3339)
+        }
+
+        results = append(results, map[string]interface{}{
+            "period":        period,
+            "on_time_count": onTimeCount,
+            "total_count":   totalCount,
+            "percentage":   percentage,
+        })
+    }
+
+    return results, nil
+}
+
+// GetOnTimeSubmissionPercentageForStudent devuelve el porcentaje de tareas entregadas a tiempo para un estudiante en un curso
+func GetOnTimeSubmissionPercentageForStudent(courseID, studentID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
+    var query string
+    var args []interface{}
+
+    if groupBy == "" {
+        baseQuery := `
+            SELECT
+                'all_time' AS period,
+                COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
+                COUNT(*) AS total_count,
+                COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
+            FROM grades_tasks
+            WHERE course_id = $1 AND student_id = $2
+        `
+        args = append(args, courseID, studentID)
+        argPos := 3
+
+        if !startTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
+            args = append(args, startTime)
+            argPos++
+        }
+
+        if !endTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
+            args = append(args, endTime)
+        }
+
+        query = baseQuery
+    } else {
+        baseQuery := `
+            SELECT
+                DATE_TRUNC($1, created_at) AS period,
+                COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
+                COUNT(*) AS total_count,
+                COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
+            FROM grades_tasks
+            WHERE course_id = $2 AND student_id = $3
+        `
+
+        args = append(args, groupBy, courseID, studentID)
+        argPos := 4
+
+        if !startTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
+            args = append(args, startTime)
+            argPos++
+        }
+
+        if !endTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
+            args = append(args, endTime)
+        }
+
+        query = baseQuery + " GROUP BY period ORDER BY period"
+    }
+
+    rows, err := DB.Query(query, args...)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var results []map[string]interface{}
+    for rows.Next() {
+        var period interface{}
+        var onTimeCount, totalCount int
+        var percentage float64
+
+        if err := rows.Scan(&period, &onTimeCount, &totalCount, &percentage); err != nil {
+            return nil, err
+        }
+
+        if t, ok := period.(time.Time); ok {
+            period = t.Format(time.RFC3339)
+        }
+
+        results = append(results, map[string]interface{}{
+            "period":        period,
+            "on_time_count": onTimeCount,
+            "total_count":   totalCount,
+            "percentage":    percentage,
+        })
+    }
+
+    return results, nil
+}
