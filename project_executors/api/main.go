@@ -107,6 +107,10 @@ func main() {
 		routing.GET("/student/:student_id/course/:course_id/task/average", handlers.APIHandlerGetStudentCourseTasksAverage)
 
 		routing.GET("/course/:course_id/task/:task_id/averages", handlers.APIHandlerGetTaskAverages)
+
+		routing.GET("/course/:course_id/on_time_percentage", handlers.APIHandlerGetCourseOnTimePercentage)
+
+		routing.GET("/course/:course_id/student/:student_id/on_time_percentage", handlers.APIHandlerGetStudentOnTimePercentage)
     })
 	}
 
