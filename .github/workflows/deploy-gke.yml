@@ -82,6 +82,7 @@ jobs:
       run: |
         kubectl get pods
         kubectl get services
+
     - name: Debug Worker Issues
       if: always()
       run: |
@@ -96,3 +97,14 @@ jobs:
         
         echo "\n=== Estado de los pods ==="
         kubectl get pods -l app=stats-worker -o wide
+
+    - name: Build and push worker
+      run: |
+        docker build -t us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:$IMAGE_TAG \
+          -f Dockerfile.queue_worker .
+        
+        gcloud auth print-access-token | docker login \
+          -u oauth2accesstoken \
+          --password-stdin https://us-central1-docker.pkg.dev
+        
+        docker push us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:$IMAGE_TAG
