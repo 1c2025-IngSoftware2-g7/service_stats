@@ -37,70 +37,25 @@ jobs:
 
     - name: Build and push images
       run: |
-        docker build -t us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:$IMAGE_TAG -f Dockerfile.queue_worker .
-    
-        docker compose -f docker-compose.yml build
-        
-        docker images
-        
-        STATS_IMAGE="us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/api-stats:$IMAGE_TAG"
-        WORKER_IMAGE="us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:$IMAGE_TAG"
-        ASYNQMON_IMAGE="us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/asynqmon:$IMAGE_TAG"
-        
-        docker tag service_stats-service_stats "$STATS_IMAGE"
-        docker tag service_stats-service_stats_queue_worker "$WORKER_IMAGE"
-        docker tag service_stats-asynqmon "$ASYNQMON_IMAGE"
-        
-        docker push "$STATS_IMAGE"
-        docker push "$WORKER_IMAGE"
-        docker push "$ASYNQMON_IMAGE"
+        # Construir y subir solo la imagen del worker desde Dockerfile.queue_worker
+        docker build -t ${GCP_REGION}-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:$IMAGE_TAG -f Dockerfile.queue_worker .
+        docker push ${GCP_REGION}-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:$IMAGE_TAG
+
+        # Construir y subir la imagen de la API
+        docker build -t ${GCP_REGION}-docker.pkg.dev/$GCP_PROJECT/docker-repository/api-stats:$IMAGE_TAG -f Dockerfile.api .
+        docker push ${GCP_REGION}-docker.pkg.dev/$GCP_PROJECT/docker-repository/api-stats:$IMAGE_TAG
+
+        # Construir y subir la imagen de Asynqmon (si es necesaria)
+        docker build -t ${GCP_REGION}-docker.pkg.dev/$GCP_PROJECT/docker-repository/asynqmon:$IMAGE_TAG -f Dockerfile.asynqmon .
+        docker push ${GCP_REGION}-docker.pkg.dev/$GCP_PROJECT/docker-repository/asynqmon:$IMAGE_TAG
 
     - name: Deploy to GKE
       run: |
-        echo "Instalando gke-gcloud-auth-plugin..."
-        sudo apt-get update
-        sudo apt-get install -y apt-transport-https ca-certificates gnupg
-        echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
-        curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
-        sudo apt-get update && sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
-
-        echo "Configurando acceso al cluster..."
         gcloud container clusters get-credentials ${CLUSTER_NAME} --region ${GCP_REGION}
 
-        echo "Actualizando manifests..."
-        [ -f "k8s/deployment.yaml" ] && sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/api-stats:${IMAGE_TAG}|g" k8s/deployment.yaml
-        [ -f "k8s/worker-deployment.yaml" ] && sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/stats-worker:${IMAGE_TAG}|g" k8s/worker-deployment.yaml
+        # Actualizar las imágenes en los manifests
+        sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/stats-worker:latest|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/stats-worker:${IMAGE_TAG}|g" k8s/worker-deployment.yaml
+        sed -i "s|us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/api-stats:v1|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/docker-repository/api-stats:${IMAGE_TAG}|g" k8s/deployment.yaml
 
-        echo "Aplicando configuración en GKE..."
         kubectl apply -f k8s/
-
-        echo "Esperando que los deployments estén listos..."
-        kubectl wait --for=condition=available --timeout=300s deployment/api-stats || echo "Deployment api-stats no encontrado"
-        kubectl wait --for=condition=available --timeout=300s deployment/stats-worker || echo "Deployment stats-worker no encontrado"
-    
-    - name: Verify deployment
-      run: |
-        kubectl get pods
-        kubectl get services
-
-    - name: Debug Worker Issues
-      if: always()
-      run: |
-        echo "=== Descripción del deployment ==="
-        kubectl describe deployment stats-worker
-        
-        echo "\n=== Logs de los pods del worker ==="
-        kubectl logs -l app=stats-worker --tail=50
-        
-        echo "\n=== Eventos del cluster ==="
-        kubectl get events --sort-by=.metadata.creationTimestamp
-        
-        echo "\n=== Estado de los pods ==="
-        kubectl get pods -l app=stats-worker -o wide
-
-    - name: Build and push worker
-      run: |
-        echo "${{ secrets.GCP_CREDENTIALS }}" | docker login -u _json_key --password-stdin https://us-central1-docker.pkg.dev
-        
-        docker build -t us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:fixed -f Dockerfile.queue_worker .
-        docker push us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:fixed
+        kubectl wait --for=condition=available --timeout=300s deployment/stats-worker
