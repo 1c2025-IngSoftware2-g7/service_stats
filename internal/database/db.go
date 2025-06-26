@@ -335,37 +335,62 @@ func GetAveragesForTask(courseID string, taskID string) ([]map[string]interface{
     return results, nil
 }
 
-// GetOnTimeSubmissionPercentageForCourse devuelve el porcentaje de tareas entregadas a tiempo para un curso
 func GetOnTimeSubmissionPercentageForCourse(courseID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
     var query string
     var args []interface{}
 
-    baseQuery := `
-        SELECT
-            DATE_TRUNC($1, created_at) AS period,
-            COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
-            COUNT(*) AS total_count,
-            (COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0) AS percentage
-        FROM grades_tasks
-        WHERE course_id = $2
-    `
+    if groupBy == "" {
+        baseQuery := `
+            SELECT
+                'all_time' AS period,
+                COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
+                COUNT(*) AS total_count,
+                COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
+            FROM grades_tasks
+            WHERE course_id = $1
+        `
+        args = append(args, courseID)
+        argPos := 2
 
-    args = append(args, groupBy, courseID)
-    argPos := 3
+        if !startTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
+            args = append(args, startTime)
+            argPos++
+        }
 
-    if !startTime.IsZero() {
-        baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
-        args = append(args, startTime)
-        argPos++
+        if !endTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
+            args = append(args, endTime)
+        }
+
+        query = baseQuery
+    } else {
+        baseQuery := `
+            SELECT
+                DATE_TRUNC($1, created_at) AS period,
+                COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
+                COUNT(*) AS total_count,
+                COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
+            FROM grades_tasks
+            WHERE course_id = $2
+        `
+
+        args = append(args, groupBy, courseID)
+        argPos := 3
+
+        if !startTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
+            args = append(args, startTime)
+            argPos++
+        }
+
+        if !endTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
+            args = append(args, endTime)
+        }
+
+        query = baseQuery + " GROUP BY period ORDER BY period"
     }
-
-    if !endTime.IsZero() {
-        baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
-        args = append(args, endTime)
-        argPos++
-    }
-
-    query = baseQuery + " GROUP BY period ORDER BY period"
 
     rows, err := DB.Query(query, args...)
     if err != nil {
@@ -375,7 +400,7 @@ func GetOnTimeSubmissionPercentageForCourse(courseID string, startTime, endTime 
 
     var results []map[string]interface{}
     for rows.Next() {
-        var period time.Time
+        var period interface{}
         var onTimeCount, totalCount int
         var percentage float64
 
@@ -383,17 +408,16 @@ func GetOnTimeSubmissionPercentageForCourse(courseID string, startTime, endTime 
             return nil, err
         }
 
-        results = append(results, map[string]interface{}{
-            "period":         period.Format(time.RFC3339),
-            "on_time_count":  onTimeCount,
-            "total_count":    totalCount,
-            "percentage":    percentage,
-        })
-    }
+        if t, ok := period.(time.Time); ok {
+            period = t.Format(time.RFC3339)
+        }
 
-    // Si no hay resultados pero no hay error, devolvemos el total sin agrupar
-    if len(results) == 0 && groupBy != "" {
-        return GetOnTimeSubmissionPercentageForCourse(courseID, startTime, endTime, "")
+        results = append(results, map[string]interface{}{
+            "period":        period,
+            "on_time_count": onTimeCount,
+            "total_count":   totalCount,
+            "percentage":   percentage,
+        })
     }
 
     return results, nil
@@ -404,32 +428,58 @@ func GetOnTimeSubmissionPercentageForStudent(courseID, studentID string, startTi
     var query string
     var args []interface{}
 
-    baseQuery := `
-        SELECT
-            DATE_TRUNC($1, created_at) AS period,
-            COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
-            COUNT(*) AS total_count,
-            (COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0) AS percentage
-        FROM grades_tasks
-        WHERE course_id = $2 AND student_id = $3
-    `
+    if groupBy == "" {
+        baseQuery := `
+            SELECT
+                'all_time' AS period,
+                COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
+                COUNT(*) AS total_count,
+                COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
+            FROM grades_tasks
+            WHERE course_id = $1 AND student_id = $2
+        `
+        args = append(args, courseID, studentID)
+        argPos := 3
 
-    args = append(args, groupBy, courseID, studentID)
-    argPos := 4
+        if !startTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
+            args = append(args, startTime)
+            argPos++
+        }
 
-    if !startTime.IsZero() {
-        baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
-        args = append(args, startTime)
-        argPos++
+        if !endTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
+            args = append(args, endTime)
+        }
+
+        query = baseQuery
+    } else {
+        baseQuery := `
+            SELECT
+                DATE_TRUNC($1, created_at) AS period,
+                COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
+                COUNT(*) AS total_count,
+                COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
+            FROM grades_tasks
+            WHERE course_id = $2 AND student_id = $3
+        `
+
+        args = append(args, groupBy, courseID, studentID)
+        argPos := 4
+
+        if !startTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
+            args = append(args, startTime)
+            argPos++
+        }
+
+        if !endTime.IsZero() {
+            baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
+            args = append(args, endTime)
+        }
+
+        query = baseQuery + " GROUP BY period ORDER BY period"
     }
-
-    if !endTime.IsZero() {
-        baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
-        args = append(args, endTime)
-        argPos++
-    }
-
-    query = baseQuery + " GROUP BY period ORDER BY period"
 
     rows, err := DB.Query(query, args...)
     if err != nil {
@@ -439,7 +489,7 @@ func GetOnTimeSubmissionPercentageForStudent(courseID, studentID string, startTi
 
     var results []map[string]interface{}
     for rows.Next() {
-        var period time.Time
+        var period interface{}
         var onTimeCount, totalCount int
         var percentage float64
 
@@ -447,17 +497,16 @@ func GetOnTimeSubmissionPercentageForStudent(courseID, studentID string, startTi
             return nil, err
         }
 
+        if t, ok := period.(time.Time); ok {
+            period = t.Format(time.RFC3339)
+        }
+
         results = append(results, map[string]interface{}{
-            "period":         period.Format(time.RFC3339),
-            "on_time_count":  onTimeCount,
-            "total_count":    totalCount,
+            "period":        period,
+            "on_time_count": onTimeCount,
+            "total_count":   totalCount,
             "percentage":    percentage,
         })
-    }
-
-    // Si no hay resultados pero no hay error, devolvemos el total sin agrupar
-    if len(results) == 0 && groupBy != "" {
-        return GetOnTimeSubmissionPercentageForStudent(courseID, studentID, startTime, endTime, "")
     }
 
     return results, nil
