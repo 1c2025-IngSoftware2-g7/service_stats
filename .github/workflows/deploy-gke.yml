@@ -80,6 +80,11 @@ jobs:
         kubectl apply -f k8s/
         kubectl apply -f k8s/redis-deployment.yaml
         kubectl apply -f k8s/redis-service.yaml
+        kubectl apply -f k8s/worker-deployment.yaml
+        
+        echo "Esperando que los deployments estén listos..."
+        kubectl wait --for=condition=available --timeout=300s deployment/api-stats || echo "Deployment api-stats no encontrado"
+        kubectl wait --for=condition=available --timeout=300s deployment/stats-worker || echo "Deployment stats-worker no encontrado"
 
     - name: Verify deployment
       run: |
