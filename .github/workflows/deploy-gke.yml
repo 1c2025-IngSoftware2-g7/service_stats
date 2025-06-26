@@ -100,8 +100,7 @@ jobs:
 
     - name: Build and push worker
       run: |
-        docker build -t us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:fixed -f Dockerfile.queue_worker .
-        
         echo "${{ secrets.GCP_CREDENTIALS }}" | docker login -u _json_key --password-stdin https://us-central1-docker.pkg.dev
         
+        docker build -t us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:fixed -f Dockerfile.queue_worker .
         docker push us-central1-docker.pkg.dev/$GCP_PROJECT/docker-repository/stats-worker:fixed
