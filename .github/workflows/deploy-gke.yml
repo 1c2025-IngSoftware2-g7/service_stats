@@ -82,3 +82,17 @@ jobs:
       run: |
         kubectl get pods
         kubectl get services
+    - name: Debug Worker Issues
+      if: always()
+      run: |
+        echo "=== Descripción del deployment ==="
+        kubectl describe deployment stats-worker
+        
+        echo "\n=== Logs de los pods del worker ==="
+        kubectl logs -l app=stats-worker --tail=50
+        
+        echo "\n=== Eventos del cluster ==="
+        kubectl get events --sort-by=.metadata.creationTimestamp
+        
+        echo "\n=== Estado de los pods ==="
+        kubectl get pods -l app=stats-worker -o wide

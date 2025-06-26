@@ -17,6 +17,7 @@ spec:
       containers:
       - name: worker
         image: us-central1-docker.pkg.dev/crypto-isotope-463815-t0/docker-repository/stats-worker:latest
+        imagePullPolicy: Always
         env:
         - name: SERVICE_STATS_POSTGRES_URL
           value: "host=postgres-service port=5432 user=stats_user password=stats_user_pass dbname=stats_db sslmode=disable"
