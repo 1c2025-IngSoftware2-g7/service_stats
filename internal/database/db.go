@@ -2,11 +2,11 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"service_stats/internal/model"
 	"time"
-	"fmt"
 
 	_ "github.com/lib/pq"
 )
@@ -14,18 +14,20 @@ import (
 var DB *sql.DB
 
 // InitDB initializes the database connection
-func InitDB(posgresUrl string) error {
+func InitDB(posgresUrl string) (*sql.DB, error) {
 	var err error
 
 	DB, err = sql.Open("postgres", posgresUrl)
 
 	if err != nil {
 		log.Fatalf("Error connecting to the database: %v", err)
+		return nil, err
 	}
 
 	// Check if the connection is established
 	if err = DB.Ping(); err != nil {
 		log.Fatalf("Error pinging the database: %v", err)
+		return nil, err
 	}
 
 	statement := `CREATE TABLE IF NOT EXISTS grades (
@@ -51,14 +53,33 @@ func InitDB(posgresUrl string) error {
 
 	if err != nil {
 		log.Fatalf("[Service Stats] error creating tables: %v", err)
+		return nil, err
 	}
-	return err
+	return DB, nil
 }
 
-func InsertGrade(grade model.Grade) error {
-	statement := `INSERT INTO grades (student_id, course_id, grade, on_time) VALUES ($1, $2, $3, $4)`
-	_, err := DB.Exec(statement, grade.StudentID, grade.CourseID, grade.Grade, grade.OnTime)
+func InsertGrade(db *sql.DB, grade model.Grade) error {
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("[Service Stats] Error starting transaction: %v", err)
+		return err
+	}
 
+	defer func() {
+		if err != nil {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				log.Printf("[Service Stats] Error rolling back transaction: %v", rollbackErr)
+			}
+		} else {
+			if commitErr := tx.Commit(); commitErr != nil {
+				log.Printf("[Service Stats] Error committing transaction: %v", commitErr)
+				err = commitErr
+			}
+		}
+	}()
+
+	statement := `INSERT INTO grades (student_id, course_id, grade, on_time) VALUES ($1, $2, $3, $4)`
+	_, err = tx.Exec(statement, grade.StudentID, grade.CourseID, grade.Grade, grade.OnTime)
 	if err != nil {
 		log.Printf("[Service Stats] Error inserting grade: %v", err)
 		return err
@@ -67,270 +88,311 @@ func InsertGrade(grade model.Grade) error {
 	return nil
 }
 
-func GetAvgGradeForStudent(studentID string, courseID string) (float64, error, int) {
+func GetAvgGradeForStudent(db *sql.DB, studentID string, courseID string) (float64, int, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("[Service Stats] Error starting transaction: %v", err)
+		return 0, http.StatusInternalServerError, err
+	}
+
+	defer func() {
+		if err == nil {
+			if commitErr := tx.Commit(); commitErr != nil {
+				log.Printf("[Service Stats] Error committing transaction: %v", commitErr)
+				err = commitErr
+			}
+		} else {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				log.Printf("[Service Stats] Error rolling back transaction: %v", rollbackErr)
+			}
+		}
+	}()
+
 	var avgGrade float64
 	statement := `SELECT AVG(grade) FROM grades WHERE student_id = $1 AND course_id = $2 GROUP BY student_id, course_id`
-	err := DB.QueryRow(statement, studentID, courseID).Scan(&avgGrade)
 
-	// in case there are no grades for the student, we return 0
+	err = tx.QueryRow(statement, studentID, courseID).Scan(&avgGrade)
+
 	if err == sql.ErrNoRows {
 		log.Printf("[Service Stats] No grades found for student %s in course %s", studentID, courseID)
-		return 0.0, nil, http.StatusNotFound
+		return 0.0, http.StatusNotFound, nil
 	}
 
-	// If there is an error other than no rows, log it and return the error
 	if err != nil {
-		log.Printf("[Service Stats] Error getting average grade for student %s: %v", studentID, err)
-		return 0, err, http.StatusInternalServerError
+		log.Printf("[Service Stats] Error getting average grade for student %s in course %s: %v", studentID, courseID, err)
+		return 0, http.StatusInternalServerError, err
 	}
 
-	// Best case scenario, we return the average grade
-	return avgGrade, nil, http.StatusOK
+	return avgGrade, http.StatusOK, nil
 }
 
-// Función para obtener promedios de estudiante por período
-func GetStudentAveragesOverTime(studentID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
-    var query string
-    var args []interface{}
-    
-    baseQuery := `
-        SELECT 
-            DATE_TRUNC($1, created_at) AS period,
-            AVG(grade) AS average_grade,
-            COUNT(*) AS grade_count
-        FROM grades
-        WHERE student_id = $2
-    `
+// GetStudentAveragesOverTime returns student's grade averages over time
+func GetStudentAveragesOverTime(DB *sql.DB, studentID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
 
-    args = append(args, groupBy, studentID)
-    argPos := 3
+	var query string
+	var args []interface{}
 
-    if !startTime.IsZero() {
-        baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
-        args = append(args, startTime)
-        argPos++
-    }
+	baseQuery := `
+		SELECT 
+			DATE_TRUNC($1, created_at) AS period,
+			AVG(grade) AS average_grade,
+			COUNT(*) AS grade_count
+		FROM grades
+		WHERE student_id = $2
+	`
 
-    if !endTime.IsZero() {
-        baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
-        args = append(args, endTime)
-        argPos++
-    }
+	args = append(args, groupBy, studentID)
+	argPos := 3
 
-    query = baseQuery + " GROUP BY period ORDER BY period"
+	if !startTime.IsZero() {
+		baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
+		args = append(args, startTime)
+		argPos++
+	}
+	if !endTime.IsZero() {
+		baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
+		args = append(args, endTime)
+		argPos++
+	}
 
-    rows, err := DB.Query(query, args...)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+	query = baseQuery + " GROUP BY period ORDER BY period"
 
-    var results []map[string]interface{}
-    for rows.Next() {
-        var period time.Time
-        var avgGrade float64
-        var count int
-        
-        if err := rows.Scan(&period, &avgGrade, &count); err != nil {
-            return nil, err
-        }
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-        results = append(results, map[string]interface{}{
-            "period":        period.Format(time.RFC3339),
-            "average_grade": avgGrade,
-            "grade_count":   count,
-        })
-    }
-
-    return results, nil
+	var results []map[string]interface{}
+	for rows.Next() {
+		var period time.Time
+		var avgGrade float64
+		var count int
+		if err := rows.Scan(&period, &avgGrade, &count); err != nil {
+			return nil, err
+		}
+		results = append(results, map[string]interface{}{
+			"period":        period.Format(time.RFC3339),
+			"average_grade": avgGrade,
+			"grade_count":   count,
+		})
+	}
+	return results, nil
 }
 
-// Función para obtener promedios de cursos por período
-func GetCourseAveragesOverTime(courseID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
-    var query string
-    var args []interface{}
-    
-    baseQuery := `
-        SELECT 
-            DATE_TRUNC($1, created_at) AS period,
-            AVG(grade) AS average_grade,
-            COUNT(*) AS grade_count
-        FROM grades
-        WHERE course_id = $2
-    `
+// GetCourseAveragesOverTime returns course's grade averages over time
+func GetCourseAveragesOverTime(DB *sql.DB, courseID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
 
-    args = append(args, groupBy, courseID)
-    argPos := 3
+	var query string
+	var args []interface{}
 
-    if !startTime.IsZero() {
-        baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
-        args = append(args, startTime)
-        argPos++
-    }
+	baseQuery := `
+		SELECT 
+			DATE_TRUNC($1, created_at) AS period,
+			AVG(grade) AS average_grade,
+			COUNT(*) AS grade_count
+		FROM grades
+		WHERE course_id = $2
+	`
 
-    if !endTime.IsZero() {
-        baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
-        args = append(args, endTime)
-        argPos++
-    }
+	args = append(args, groupBy, courseID)
+	argPos := 3
 
-    query = baseQuery + " GROUP BY period ORDER BY period"
+	if !startTime.IsZero() {
+		baseQuery += fmt.Sprintf(" AND created_at >= $%d", argPos)
+		args = append(args, startTime)
+		argPos++
+	}
+	if !endTime.IsZero() {
+		baseQuery += fmt.Sprintf(" AND created_at <= $%d", argPos)
+		args = append(args, endTime)
+		argPos++
+	}
 
-    rows, err := DB.Query(query, args...)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+	query = baseQuery + " GROUP BY period ORDER BY period"
 
-    var results []map[string]interface{}
-    for rows.Next() {
-        var period time.Time
-        var avgGrade float64
-        var count int
-        
-        if err := rows.Scan(&period, &avgGrade, &count); err != nil {
-            return nil, err
-        }
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-        results = append(results, map[string]interface{}{
-            "period":        period.Format(time.RFC3339),
-            "average_grade": avgGrade,
-            "grade_count":   count,
-        })
-    }
-
-    return results, nil
+	var results []map[string]interface{}
+	for rows.Next() {
+		var period time.Time
+		var avgGrade float64
+		var count int
+		if err := rows.Scan(&period, &avgGrade, &count); err != nil {
+			return nil, err
+		}
+		results = append(results, map[string]interface{}{
+			"period":        period.Format(time.RFC3339),
+			"average_grade": avgGrade,
+			"grade_count":   count,
+		})
+	}
+	return results, nil
 }
 
-// InsertGradeTask inserts a new grade task into the database
-func InsertGradeTask(grade model.GradeTask) error {
-    statement := `INSERT INTO grades_tasks (student_id, course_id, task_id, grade, on_time)
-                  VALUES ($1, $2, $3, $4, $5)`
-    _, err := DB.Exec(statement, grade.StudentID, grade.CourseID, grade.TaskID, grade.Grade, grade.OnTime)
+// InsertGradeTask inserts a new grade task
+func InsertGradeTask(DB *sql.DB, grade model.GradeTask) error {
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-    if err != nil {
-        log.Printf("[Service Stats] Error inserting grade task: %v", err)
-        return err
-    }
+	statement := `INSERT INTO grades_tasks (student_id, course_id, task_id, grade, on_time)
+				  VALUES ($1, $2, $3, $4, $5)`
+	_, err = tx.Exec(statement, grade.StudentID, grade.CourseID, grade.TaskID, grade.Grade, grade.OnTime)
+	if err != nil {
+		log.Printf("[Service Stats] Error inserting grade task: %v", err)
+		return err
+	}
 
-    return nil
+	return tx.Commit()
 }
 
-// GetAvgGradeTaskForStudent returns the average grade for a student in a specific task
-func GetAvgGradeTaskForStudent(studentID string, courseID string, taskID string) (float64, error, int) {
-    var avgGrade float64
-    statement := `SELECT AVG(grade) FROM grades_tasks
-                  WHERE student_id = $1 AND course_id = $2 AND task_id = $3
-                  GROUP BY student_id, course_id, task_id`
+// GetAvgGradeTaskForStudent returns student's average in one task
+func GetAvgGradeTaskForStudent(DB *sql.DB, studentID string, courseID string, taskID string) (float64, int, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return 0, http.StatusInternalServerError, err
+	}
+	defer tx.Rollback()
 
-    err := DB.QueryRow(statement, studentID, courseID, taskID).Scan(&avgGrade)
+	var avgGrade float64
+	statement := `SELECT AVG(grade) FROM grades_tasks
+				  WHERE student_id = $1 AND course_id = $2 AND task_id = $3
+				  GROUP BY student_id, course_id, task_id`
 
-    if err == sql.ErrNoRows {
-        log.Printf("[Service Stats] No grades found for student %s in course %s task %s",
-                   studentID, courseID, taskID)
-        return 0.0, nil, http.StatusNotFound
-    }
+	err = tx.QueryRow(statement, studentID, courseID, taskID).Scan(&avgGrade)
+	if err == sql.ErrNoRows {
+		log.Printf("[Service Stats] No grades found for student %s in course %s task %s", studentID, courseID, taskID)
+		return 0.0, http.StatusNotFound, nil
+	}
+	if err != nil {
+		log.Printf("[Service Stats] Error getting average grade for task: %v", err)
+		return 0, http.StatusInternalServerError, err
+	}
 
-    if err != nil {
-        log.Printf("[Service Stats] Error getting average grade for task: %v", err)
-        return 0, err, http.StatusInternalServerError
-    }
-
-    return avgGrade, nil, http.StatusOK
+	return avgGrade, http.StatusOK, nil
 }
 
-// GetStudentCourseTasksAverage devuelve el promedio de un estudiante en todas las tasks de un curso
-func GetStudentCourseTasksAverage(studentID string, courseID string) (float64, error, int) {
-    var avgGrade float64
-    statement := `SELECT AVG(grade) FROM grades_tasks
-                  WHERE student_id = $1 AND course_id = $2`
+// GetStudentCourseTasksAverage returns average for student in all course tasks
+func GetStudentCourseTasksAverage(DB *sql.DB, studentID string, courseID string) (float64, int, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return 0, http.StatusInternalServerError, err
+	}
+	defer tx.Rollback()
 
-    err := DB.QueryRow(statement, studentID, courseID).Scan(&avgGrade)
+	var avgGrade float64
+	statement := `SELECT AVG(grade) FROM grades_tasks WHERE student_id = $1 AND course_id = $2`
 
-    if err == sql.ErrNoRows {
-        return 0.0, nil, http.StatusNotFound
-    }
-    if err != nil {
-        return 0, err, http.StatusInternalServerError
-    }
+	err = tx.QueryRow(statement, studentID, courseID).Scan(&avgGrade)
+	if err == sql.ErrNoRows {
+		return 0.0, http.StatusNotFound, nil
+	}
+	if err != nil {
+		return 0, http.StatusInternalServerError, err
+	}
 
-    return avgGrade, nil, http.StatusOK
+	return avgGrade, http.StatusOK, nil
 }
 
-// GetOtherStudentsCourseAverages devuelve los promedios de otros estudiantes en el curso
-func GetOtherStudentsCourseAverages(studentID string, courseID string) ([]map[string]interface{}, error) {
-    query := `
-        SELECT
-            student_id,
-            AVG(grade) as average_grade,
-            COUNT(*) as task_count
-        FROM grades_tasks
-        WHERE course_id = $1 AND student_id != $2
-        GROUP BY student_id
-        ORDER BY average_grade DESC
-    `
+// GetOtherStudentsCourseAverages returns averages for all other students in a course
+func GetOtherStudentsCourseAverages(DB *sql.DB, studentID string, courseID string) ([]map[string]interface{}, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
 
-    rows, err := DB.Query(query, courseID, studentID)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+	query := `
+		SELECT
+			student_id,
+			AVG(grade) as average_grade,
+			COUNT(*) as task_count
+		FROM grades_tasks
+		WHERE course_id = $1 AND student_id != $2
+		GROUP BY student_id
+		ORDER BY average_grade DESC
+	`
 
-    var results []map[string]interface{}
-    for rows.Next() {
-        var studentID string
-        var avgGrade float64
-        var taskCount int
+	rows, err := tx.Query(query, courseID, studentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-        if err := rows.Scan(&studentID, &avgGrade, &taskCount); err != nil {
-            return nil, err
-        }
+	var results []map[string]interface{}
+	for rows.Next() {
+		var sID string
+		var avgGrade float64
+		var taskCount int
+		if err := rows.Scan(&sID, &avgGrade, &taskCount); err != nil {
+			return nil, err
+		}
+		results = append(results, map[string]interface{}{
+			"student_id":    sID,
+			"average_grade": avgGrade,
+			"task_count":    taskCount,
+		})
+	}
 
-        results = append(results, map[string]interface{}{
-            "student_id":    studentID,
-            "average_grade": avgGrade,
-            "task_count":   taskCount,
-        })
-    }
-
-    return results, nil
+	return results, nil
 }
 
-// GetAveragesForTask devuelve los promedios de todos los estudiantes para una task específica
-func GetAveragesForTask(courseID string, taskID string) ([]map[string]interface{}, error) {
-    query := `
-        SELECT
-            student_id,
-            AVG(grade) as average_grade,
-            COUNT(*) as grade_count
-        FROM grades_tasks
-        WHERE course_id = $1 AND task_id = $2
-        GROUP BY student_id
-        ORDER BY average_grade DESC
-    `
+// GetAveragesForTask returns averages for all students in a task
+func GetAveragesForTask(DB *sql.DB, courseID string, taskID string) ([]map[string]interface{}, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
 
-    rows, err := DB.Query(query, courseID, taskID)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+	query := `
+		SELECT
+			student_id,
+			AVG(grade) as average_grade,
+			COUNT(*) as grade_count
+		FROM grades_tasks
+		WHERE course_id = $1 AND task_id = $2
+		GROUP BY student_id
+		ORDER BY average_grade DESC
+	`
 
-    var results []map[string]interface{}
-    for rows.Next() {
-        var studentID string
-        var avgGrade float64
-        var gradeCount int
+	rows, err := tx.Query(query, courseID, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-        if err := rows.Scan(&studentID, &avgGrade, &gradeCount); err != nil {
-            return nil, err
-        }
+	var results []map[string]interface{}
+	for rows.Next() {
+		var sID string
+		var avgGrade float64
+		var gradeCount int
+		if err := rows.Scan(&sID, &avgGrade, &gradeCount); err != nil {
+			return nil, err
+		}
+		results = append(results, map[string]interface{}{
+			"student_id":    sID,
+			"average_grade": avgGrade,
+			"grade_count":   gradeCount,
+		})
+	}
 
-        results = append(results, map[string]interface{}{
-            "student_id":    studentID,
-            "average_grade": avgGrade,
-            "grade_count":   gradeCount,
-        })
-    }
-
-    return results, nil
+	return results, nil
 }

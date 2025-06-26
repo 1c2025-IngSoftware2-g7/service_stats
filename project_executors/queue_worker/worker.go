@@ -28,7 +28,7 @@ func main() {
 	// Initialize the database connection with internal/database/db.go
 
 	log.Printf("[Worker queue] Initializing database connection to [%s]", database_url)
-	err := database.InitDB(database_url)
+	db_ref, err := database.InitDB(database_url)
 
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
@@ -42,7 +42,7 @@ func main() {
 		asynq.Config{Concurrency: 10},
 	)
 
-	mux := queue.NewMux()
+	mux := queue.NewMux(db_ref)
 
 	if err := srv.Run(mux); err != nil {
 		log.Fatalf("[Worker queue] Could not run worker: %v", err)

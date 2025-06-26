@@ -63,10 +63,10 @@ func main() {
 	// Initialize the database connection with internal/database/db.go
 
 	log.Printf("[Main APP] Initializing database connection to [%s]", database_url)
-	err := database.InitDB(database_url)
+	db_ref, err_creating := database.InitDB(database_url)
 
-	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+	if err_creating != nil {
+		log.Fatalf("Failed to initialize database: %v", err_creating)
 	}
 
 	{
@@ -88,11 +88,17 @@ func main() {
 			handlers.EnqueueAddStadisticForStudent(c, enqueuer, grade)
 		})
 
-		routing.GET("/student/:student_id/course/:course_id", handlers.APIHandlerGetStatsForStudent)
+		routing.GET("/student/:student_id/course/:course_id", func(c *gin.Context) {
+			handlers.APIHandlerGetStatsForStudent(db_ref, c)
+		})
 
 		// Endpoints individuales
-		routing.GET("/student/:student_id/average", handlers.APIHandlerGetStudentAverageOverTime)
-    	routing.GET("/course/:course_id/average", handlers.APIHandlerGetCourseAverageOverTime)
+		routing.GET("/student/:student_id/average", func(c *gin.Context) {
+			handlers.APIHandlerGetStudentAverageOverTime(db_ref, c)
+		})
+		routing.GET("/course/:course_id/average", func(c *gin.Context) {
+			handlers.APIHandlerGetCourseAverageOverTime(db_ref, c)
+		})
 
 		routing.POST("/student/task/grade", func(c *gin.Context) {
 			var gradeTask model.GradeTask
@@ -102,12 +108,16 @@ func main() {
 			}
 			handlers.EnqueueAddGradeTask(c, enqueuer, gradeTask)
 
-		//routing.GET("/student/:student_id/course/:course_id/task/:task_id", handlers.APIHandlerGetStatsForStudentTask)
+			//routing.GET("/student/:student_id/course/:course_id/task/:task_id", handlers.APIHandlerGetStatsForStudentTask)
+		})
 
-		routing.GET("/student/:student_id/course/:course_id/task/average", handlers.APIHandlerGetStudentCourseTasksAverage)
+		routing.GET("/student/:student_id/course/:course_id/task/average", func(c *gin.Context) {
+			handlers.APIHandlerGetStudentCourseTasksAverage(db_ref, c)
+		})
 
-		routing.GET("/course/:course_id/task/:task_id/averages", handlers.APIHandlerGetTaskAverages)
-    })
+		routing.GET("/course/:course_id/task/:task_id/averages", func(c *gin.Context) {
+			handlers.APIHandlerGetTaskAverages(db_ref, c)
+		})
 	}
 
 	// Lets log the server start

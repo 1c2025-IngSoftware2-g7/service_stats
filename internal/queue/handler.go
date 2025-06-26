@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log"
 
@@ -13,11 +14,14 @@ import (
 	"github.com/hibiken/asynq"
 )
 
-func NewMux() *asynq.ServeMux {
-    mux := asynq.NewServeMux()
-    mux.HandleFunc(types.TaskAddStudentGrade, HandleAddStadisticForStudent)
-    mux.HandleFunc(types.TaskAddStudentGradeTask, HandleAddGradeTask)
-    return mux
+var db *sql.DB
+
+func NewMux(database_ref *sql.DB) *asynq.ServeMux {
+	mux := asynq.NewServeMux()
+	mux.HandleFunc(types.TaskAddStudentGrade, HandleAddStadisticForStudent)
+	mux.HandleFunc(types.TaskAddStudentGradeTask, HandleAddGradeTask)
+	db = database_ref
+	return mux
 }
 
 func HandleAddStadisticForStudent(ctx context.Context, t *asynq.Task) error {
@@ -28,7 +32,7 @@ func HandleAddStadisticForStudent(ctx context.Context, t *asynq.Task) error {
 
 	log.Printf("Processing task: %s with payload: %+v", t.Type(), p)
 
-	err := database.InsertGrade(p)
+	err := database.InsertGrade(db, p)
 
 	if err != nil {
 		log.Printf("Failed to insert grade for %v: %v", p, err)
@@ -39,18 +43,18 @@ func HandleAddStadisticForStudent(ctx context.Context, t *asynq.Task) error {
 }
 
 func HandleAddGradeTask(ctx context.Context, t *asynq.Task) error {
-    var p model.GradeTask
-    if err := json.Unmarshal(t.Payload(), &p); err != nil {
-        return err
-    }
+	var p model.GradeTask
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return err
+	}
 
-    log.Printf("Processing grade task: %s with payload: %+v", t.Type(), p)
+	log.Printf("Processing grade task: %s with payload: %+v", t.Type(), p)
 
-    err := database.InsertGradeTask(p)
-    if err != nil {
-        log.Printf("Failed to insert grade task for %v: %v", p, err)
-        return err
-    }
+	err := database.InsertGradeTask(db, p)
+	if err != nil {
+		log.Printf("Failed to insert grade task for %v: %v", p, err)
+		return err
+	}
 
-    return nil
+	return nil
 }
