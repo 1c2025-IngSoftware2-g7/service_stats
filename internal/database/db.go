@@ -511,3 +511,39 @@ func GetOnTimeSubmissionPercentageForStudent(courseID, studentID string, startTi
 
     return results, nil
 }
+
+// CheckGradeTaskExists verifica si ya existe un registro para esta combinación
+func CheckGradeTaskExists(studentID, courseID, taskID string) (bool, error) {
+    var exists bool
+    query := `SELECT EXISTS(
+        SELECT 1 FROM grades_tasks
+        WHERE student_id = $1 AND course_id = $2 AND task_id = $3
+    )`
+    err := DB.QueryRow(query, studentID, courseID, taskID).Scan(&exists)
+    if err != nil {
+        return false, err
+    }
+    return exists, nil
+}
+
+// UpdateGradeTask actualiza un registro existente
+func UpdateGradeTask(grade model.GradeTask) error {
+    statement := `UPDATE grades_tasks
+                 SET grade = $4, on_time = $5, created_at = NOW()
+                 WHERE student_id = $1 AND course_id = $2 AND task_id = $3`
+
+    _, err := DB.Exec(
+        statement,
+        grade.StudentID,
+        grade.CourseID,
+        grade.TaskID,
+        grade.Grade,
+        grade.OnTime,
+    )
+
+    if err != nil {
+        log.Printf("[Service Stats] Error updating grade task: %v", err)
+        return err
+    }
+    return nil
+}
