@@ -9,6 +9,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setupDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock) {
@@ -561,4 +562,44 @@ func TestGetAveragesForTask_DBError(t *testing.T) {
 	res, err := GetAveragesForTask(db, "c1", "t1")
 	assert.Error(t, err)
 	assert.Nil(t, res)
+}
+
+func TestGetStudentAveragesOverTime(t *testing.T) {
+	db, mock := setupDB(t)
+	defer db.Close()
+
+	mock.ExpectBegin()
+
+	groupBy := "day"
+	studentID := "student1"
+	start := time.Date(2025, 6, 20, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2025, 6, 27, 0, 0, 0, 0, time.UTC)
+
+	// Expect the query that will be executed inside the function
+	query := `SELECT DATE_TRUNC($1, created_at) AS period, AVG(grade) AS average_grade, COUNT(*) AS grade_count FROM grades WHERE student_id = $2 AND created_at >= $3 AND created_at <= $4 GROUP BY period ORDER BY period`
+
+	// Simulated rows returned from DB
+	rows := sqlmock.NewRows([]string{"period", "average_grade", "grade_count"}).
+		AddRow(start, 87.5, 2).
+		AddRow(end, 90.0, 1)
+
+	mock.ExpectQuery(query).
+		WithArgs(groupBy, studentID, start, end).
+		WillReturnRows(rows)
+
+	mock.ExpectRollback()
+
+	results, err := GetStudentAveragesOverTime(db, studentID, start, end, groupBy)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+
+	assert.Equal(t, "2025-06-20T00:00:00Z", results[0]["period"])
+	assert.Equal(t, 87.5, results[0]["average_grade"])
+	assert.Equal(t, int(2), results[0]["grade_count"])
+
+	assert.Equal(t, "2025-06-27T00:00:00Z", results[1]["period"])
+	assert.Equal(t, 90.0, results[1]["average_grade"])
+	assert.Equal(t, int(1), results[1]["grade_count"])
+
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
