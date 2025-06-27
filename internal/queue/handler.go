@@ -24,6 +24,11 @@ func NewMux(database_ref *sql.DB) *asynq.ServeMux {
 	return mux
 }
 
+var (
+	InsertGradeFunc     = database.InsertGrade
+	InsertGradeTaskFunc = database.InsertGradeTask
+)
+
 func HandleAddStadisticForStudent(ctx context.Context, t *asynq.Task) error {
 	var p model.Grade
 	if err := json.Unmarshal(t.Payload(), &p); err != nil {
@@ -32,8 +37,7 @@ func HandleAddStadisticForStudent(ctx context.Context, t *asynq.Task) error {
 
 	log.Printf("Processing task: %s with payload: %+v", t.Type(), p)
 
-	err := database.InsertGrade(db, p)
-
+	err := InsertGradeFunc(db, p)
 	if err != nil {
 		log.Printf("Failed to insert grade for %v: %v", p, err)
 		return err
@@ -50,7 +54,7 @@ func HandleAddGradeTask(ctx context.Context, t *asynq.Task) error {
 
 	log.Printf("Processing grade task: %s with payload: %+v", t.Type(), p)
 
-	err := database.InsertGradeTask(db, p)
+	err := InsertGradeTaskFunc(db, p)
 	if err != nil {
 		log.Printf("Failed to insert grade task for %v: %v", p, err)
 		return err

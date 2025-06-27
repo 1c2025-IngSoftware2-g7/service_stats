@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"net/http"
 	"service_stats/internal/database"
-	"service_stats/internal/model"
 	"time"
 	"unicode"
 
@@ -25,17 +24,17 @@ func isValidObjectID(id string) bool {
 	return true
 }
 
-func APIHandlerInsertGrade( /*c *gin.Context*/ StudentGrade model.Grade) {
+/*func APIHandlerInsertGrade( c *gin.Context, StudentGrade model.Grade) {
 
-	/*err := database.InsertGrade(StudentGrade)
+	err := database.InsertGrade(StudentGrade)
 
 	if err != nil {
 		// Handle the error, e.g., log it and return an error response
 		log.Printf("Error inserting grade with data %v: %v", StudentGrade, err)
 		return
-	}*/
+	}
 
-	/*
+
 		Lo dejo como schema para el futuro
 		var grade model.Grade
 
@@ -54,8 +53,8 @@ func APIHandlerInsertGrade( /*c *gin.Context*/ StudentGrade model.Grade) {
 
 		log.Printf("Grade inserted successfully: %+v", grade)
 
-		c.JSON(http.StatusOK, gin.H{"result": "Grade inserted successfully", "status": http.StatusOK})*/
-}
+		c.JSON(http.StatusOK, gin.H{"result": "Grade inserted successfully", "status": http.StatusOK})
+}*/
 
 func APIHandlerGetStatsForStudent(db *sql.DB, c *gin.Context) {
 	studentID := c.Param("student_id")
@@ -310,7 +309,7 @@ func APIHandlerGetTaskAverages(db *sql.DB, c *gin.Context) {
 }
 
 // Handler para porcentaje de entregas a tiempo en un curso
-func APIHandlerGetCourseOnTimePercentage(c *gin.Context) {
+func APIHandlerGetCourseOnTimePercentage(db_ref *sql.DB, c *gin.Context) {
 	courseID := c.Param("course_id")
 	var req TimeRangeRequest
 
@@ -325,7 +324,7 @@ func APIHandlerGetCourseOnTimePercentage(c *gin.Context) {
 		return
 	}
 
-	results, err := database.GetOnTimeSubmissionPercentageForCourse(courseID, startTime, endTime, req.GroupBy)
+	results, err := database.GetOnTimeSubmissionPercentageForCourse(db_ref, courseID, startTime, endTime, req.GroupBy)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -343,7 +342,7 @@ func APIHandlerGetCourseOnTimePercentage(c *gin.Context) {
 }
 
 // Handler para porcentaje de entregas a tiempo de un estudiante en un curso
-func APIHandlerGetStudentOnTimePercentage(c *gin.Context) {
+func APIHandlerGetStudentOnTimePercentage(db_ref *sql.DB, c *gin.Context) {
 	courseID := c.Param("course_id")
 	studentID := c.Param("student_id")
 	var req TimeRangeRequest
@@ -359,7 +358,7 @@ func APIHandlerGetStudentOnTimePercentage(c *gin.Context) {
 		return
 	}
 
-	results, err := database.GetOnTimeSubmissionPercentageForStudent(courseID, studentID, startTime, endTime, req.GroupBy)
+	results, err := database.GetOnTimeSubmissionPercentageForStudent(db_ref, courseID, studentID, startTime, endTime, req.GroupBy)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

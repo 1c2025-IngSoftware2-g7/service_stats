@@ -88,7 +88,7 @@ func InsertGrade(db *sql.DB, grade model.Grade) error {
 	return nil
 }
 
-func GetAvgGradeForStudent(db *sql.DB, studentID string, courseID string) (float64, int, error) {
+var GetAvgGradeForStudent = func(db *sql.DB, studentID string, courseID string) (float64, int, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		log.Printf("[Service Stats] Error starting transaction: %v", err)
@@ -127,7 +127,7 @@ func GetAvgGradeForStudent(db *sql.DB, studentID string, courseID string) (float
 }
 
 // GetStudentAveragesOverTime returns student's grade averages over time
-func GetStudentAveragesOverTime(DB *sql.DB, studentID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
+var GetStudentAveragesOverTime = func(DB *sql.DB, studentID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
 	tx, err := DB.Begin()
 	if err != nil {
 		return nil, err
@@ -186,7 +186,7 @@ func GetStudentAveragesOverTime(DB *sql.DB, studentID string, startTime, endTime
 }
 
 // GetCourseAveragesOverTime returns course's grade averages over time
-func GetCourseAveragesOverTime(DB *sql.DB, courseID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
+var GetCourseAveragesOverTime = func(DB *sql.DB, courseID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
 	tx, err := DB.Begin()
 	if err != nil {
 		return nil, err
@@ -264,7 +264,7 @@ func InsertGradeTask(DB *sql.DB, grade model.GradeTask) error {
 }
 
 // GetAvgGradeTaskForStudent returns student's average in one task
-func GetAvgGradeTaskForStudent(DB *sql.DB, studentID string, courseID string, taskID string) (float64, int, error) {
+var GetAvgGradeTaskForStudent = func(DB *sql.DB, studentID string, courseID string, taskID string) (float64, int, error) {
 	tx, err := DB.Begin()
 	if err != nil {
 		return 0, http.StatusInternalServerError, err
@@ -290,7 +290,7 @@ func GetAvgGradeTaskForStudent(DB *sql.DB, studentID string, courseID string, ta
 }
 
 // GetStudentCourseTasksAverage returns average for student in all course tasks
-func GetStudentCourseTasksAverage(DB *sql.DB, studentID string, courseID string) (float64, int, error) {
+var GetStudentCourseTasksAverage = func(DB *sql.DB, studentID string, courseID string) (float64, int, error) {
 	tx, err := DB.Begin()
 	if err != nil {
 		return 0, http.StatusInternalServerError, err
@@ -312,7 +312,7 @@ func GetStudentCourseTasksAverage(DB *sql.DB, studentID string, courseID string)
 }
 
 // GetOtherStudentsCourseAverages returns averages for all other students in a course
-func GetOtherStudentsCourseAverages(DB *sql.DB, studentID string, courseID string) ([]map[string]interface{}, error) {
+var GetOtherStudentsCourseAverages = func(DB *sql.DB, studentID string, courseID string) ([]map[string]interface{}, error) {
 	tx, err := DB.Begin()
 	if err != nil {
 		return nil, err
@@ -355,7 +355,7 @@ func GetOtherStudentsCourseAverages(DB *sql.DB, studentID string, courseID strin
 }
 
 // GetAveragesForTask returns averages for all students in a task
-func GetAveragesForTask(DB *sql.DB, courseID string, taskID string) ([]map[string]interface{}, error) {
+var GetAveragesForTask = func(DB *sql.DB, courseID string, taskID string) ([]map[string]interface{}, error) {
 	tx, err := DB.Begin()
 	if err != nil {
 		return nil, err
@@ -397,20 +397,28 @@ func GetAveragesForTask(DB *sql.DB, courseID string, taskID string) ([]map[strin
 	return results, nil
 }
 
-func GetOnTimeSubmissionPercentageForCourse(courseID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
+var GetOnTimeSubmissionPercentageForCourse = func(DB *sql.DB, courseID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback() // rollback is safe even if already committed
+	}()
+
 	var query string
 	var args []interface{}
 
 	if groupBy == "" {
 		baseQuery := `
-            SELECT
-                'all_time' AS period,
-                COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
-                COUNT(*) AS total_count,
-                COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
-            FROM grades_tasks
-            WHERE course_id = $1
-        `
+			SELECT
+				'all_time' AS period,
+				COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
+				COUNT(*) AS total_count,
+				COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
+			FROM grades_tasks
+			WHERE course_id = $1
+		`
 		args = append(args, courseID)
 		argPos := 2
 
@@ -428,14 +436,14 @@ func GetOnTimeSubmissionPercentageForCourse(courseID string, startTime, endTime 
 		query = baseQuery
 	} else {
 		baseQuery := `
-            SELECT
-                DATE_TRUNC($1, created_at) AS period,
-                COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
-                COUNT(*) AS total_count,
-                COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
-            FROM grades_tasks
-            WHERE course_id = $2
-        `
+			SELECT
+				DATE_TRUNC($1, created_at) AS period,
+				COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
+				COUNT(*) AS total_count,
+				COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
+			FROM grades_tasks
+			WHERE course_id = $2
+		`
 
 		args = append(args, groupBy, courseID)
 		argPos := 3
@@ -454,7 +462,7 @@ func GetOnTimeSubmissionPercentageForCourse(courseID string, startTime, endTime 
 		query = baseQuery + " GROUP BY period ORDER BY period"
 	}
 
-	rows, err := DB.Query(query, args...)
+	rows, err := tx.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -482,24 +490,36 @@ func GetOnTimeSubmissionPercentageForCourse(courseID string, startTime, endTime 
 		})
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
 	return results, nil
 }
 
 // GetOnTimeSubmissionPercentageForStudent devuelve el porcentaje de tareas entregadas a tiempo para un estudiante en un curso
-func GetOnTimeSubmissionPercentageForStudent(courseID, studentID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
+var GetOnTimeSubmissionPercentageForStudent = func(DB *sql.DB, courseID, studentID string, startTime, endTime time.Time, groupBy string) ([]map[string]interface{}, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback() // Safe rollback in case of early return or failure
+	}()
+
 	var query string
 	var args []interface{}
 
 	if groupBy == "" {
 		baseQuery := `
-            SELECT
-                'all_time' AS period,
-                COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
-                COUNT(*) AS total_count,
-                COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
-            FROM grades_tasks
-            WHERE course_id = $1 AND student_id = $2
-        `
+			SELECT
+				'all_time' AS period,
+				COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
+				COUNT(*) AS total_count,
+				COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
+			FROM grades_tasks
+			WHERE course_id = $1 AND student_id = $2
+		`
 		args = append(args, courseID, studentID)
 		argPos := 3
 
@@ -517,14 +537,14 @@ func GetOnTimeSubmissionPercentageForStudent(courseID, studentID string, startTi
 		query = baseQuery
 	} else {
 		baseQuery := `
-            SELECT
-                DATE_TRUNC($1, created_at) AS period,
-                COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
-                COUNT(*) AS total_count,
-                COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
-            FROM grades_tasks
-            WHERE course_id = $2 AND student_id = $3
-        `
+			SELECT
+				DATE_TRUNC($1, created_at) AS period,
+				COUNT(*) FILTER (WHERE on_time = true) AS on_time_count,
+				COUNT(*) AS total_count,
+				COALESCE((COUNT(*) FILTER (WHERE on_time = true) * 100.0 / NULLIF(COUNT(*), 0)), 0) AS percentage
+			FROM grades_tasks
+			WHERE course_id = $2 AND student_id = $3
+		`
 
 		args = append(args, groupBy, courseID, studentID)
 		argPos := 4
@@ -543,7 +563,7 @@ func GetOnTimeSubmissionPercentageForStudent(courseID, studentID string, startTi
 		query = baseQuery + " GROUP BY period ORDER BY period"
 	}
 
-	rows, err := DB.Query(query, args...)
+	rows, err := tx.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -569,6 +589,10 @@ func GetOnTimeSubmissionPercentageForStudent(courseID, studentID string, startTi
 			"total_count":   totalCount,
 			"percentage":    percentage,
 		})
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 
 	return results, nil
