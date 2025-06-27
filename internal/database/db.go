@@ -13,6 +13,47 @@ import (
 
 var DB *sql.DB
 
+func InitDB(posgresUrl string) (*sql.DB, error) {
+	var err error
+
+	DB, err = sql.Open("postgres", posgresUrl)
+	if err != nil {
+		return nil, fmt.Errorf("error connecting to the database: %w", err)
+	}
+
+	if err = DB.Ping(); err != nil {
+		return nil, fmt.Errorf("error pinging the database: %w", err)
+	}
+
+	statement := `
+	CREATE TABLE IF NOT EXISTS grades (
+		id SERIAL PRIMARY KEY,
+		student_id TEXT NOT NULL,
+		course_id  TEXT NOT NULL,
+		grade      NUMERIC NOT NULL,
+		on_time    BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE IF NOT EXISTS grades_tasks (
+		id SERIAL PRIMARY KEY,
+		student_id TEXT NOT NULL,
+		course_id  TEXT NOT NULL,
+		task_id    TEXT NOT NULL,
+		grade      NUMERIC NOT NULL,
+		on_time    BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);
+	`
+
+	if _, err = DB.Exec(statement); err != nil {
+		return nil, fmt.Errorf("error creating tables: %w", err)
+	}
+
+	return DB, nil
+}
+
+/*var DB *sql.DB
+
 // InitDB initializes the database connection
 func InitDB(posgresUrl string) (*sql.DB, error) {
 	var err error
@@ -56,7 +97,7 @@ func InitDB(posgresUrl string) (*sql.DB, error) {
 		return nil, err
 	}
 	return DB, nil
-}
+}*/
 
 var InsertGrade = func(db *sql.DB, grade model.Grade) (err error) {
 	tx, err := db.Begin()

@@ -80,3 +80,65 @@ func TestEnqueueAddStadisticForStudent_Error(t *testing.T) {
 		t.Errorf("expected body to contain failure message, got %q", w.Body.String())
 	}
 }
+
+func TestEnqueueAddGradeTask_Sucess(t *testing.T) {
+	// Mock enqueuer returns 10 seconds delay, no error
+	mock := &MockEnqueuer{
+		EnqueueFunc: func(taskType string, payload interface{}) (time.Duration, error) {
+			return 10 * time.Second, nil
+		},
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	// Use a sample payload
+	payload := model.GradeTask{
+		StudentID: "12345",
+		CourseID:  "67890",
+		Grade:     95,
+		TaskID:    "task123",
+	}
+
+	// Call the handler
+	EnqueueAddGradeTask(c, mock, payload)
+
+	// Check status code
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200 but got %d", w.Code)
+	}
+
+	expectedSubstring := "{\"result\":\"Task task:add_student_grade_task queued successfully (Expected time to be processed: 0.17 minutes)\",\"status\":200}"
+	if !strings.Contains(w.Body.String(), expectedSubstring) {
+		t.Errorf("expected body to contain %q, got %q", expectedSubstring, w.Body.String())
+	}
+}
+
+func TestEnqueueAddGradeTask_Failure(t *testing.T) {
+	// Mock enqueuer returns error
+	mock := &MockEnqueuer{
+		EnqueueFunc: func(taskType string, payload interface{}) (time.Duration, error) {
+			return 0, errors.New("enqueue failed")
+		},
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	payload := model.GradeTask{
+		StudentID: "12345",
+		CourseID:  "67890",
+		Grade:     95,
+		TaskID:    "task123",
+	}
+
+	EnqueueAddGradeTask(c, mock, payload)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 but got %d", w.Code)
+	}
+
+	if !strings.Contains(w.Body.String(), "Failed to enqueue task") {
+		t.Errorf("expected body to contain failure message, got %q", w.Body.String())
+	}
+}
