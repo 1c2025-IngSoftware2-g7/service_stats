@@ -53,6 +53,7 @@ En este microservicio intentamos ir por la idea de arquitectura de capas, donde 
 
 ## 4. CI-CD
 
+[![codecov](https://codecov.io/gh/1c2025-IngSoftware2-g7/service_stats/branch/feature%2Ftests/graph/badge.svg?token=51BR8Q143V)](https://codecov.io/gh/1c2025-IngSoftware2-g7/service_stats)
 
 ### Test coverage
 
