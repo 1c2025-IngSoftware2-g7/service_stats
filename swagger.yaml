@@ -1,0 +1,370 @@
+openapi: 3.0.0
+info:
+  title: Statistics API
+  version: 1.0.0
+  description: Microservicio para gestión de estadísticas educativas en ClassConnect
+
+tags:
+  - name: Health
+    description: Health Checkpoints for the service
+  - name: Statistics
+    description: Operaciones relacionadas con estadísticas de cursos y estudiantes
+  - name: Grades
+    description: Operaciones relacionadas con calificaciones
+
+servers:
+  - url: http://localhost:8080/stats
+  - url: https://service-api-stats.onrender.com
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "OK"
+
+  /student/grade:
+    post:
+      tags:
+        - Grades
+      summary: Registrar una nueva calificación (asíncrono)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Grade'
+      responses:
+        '200':
+          description: Tarea encolada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                  status:
+                    type: integer
+                    example: 200
+        '400':
+          description: Entrada inválida
+
+  /student/task/grade:
+    post:
+      tags:
+        - Grades
+      summary: Registrar calificación de tarea (asíncrono)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradeTask'
+      responses:
+        '200':
+          description: Tarea encolada exitosamente
+        '400':
+          description: Entrada inválida
+
+  /course/{course_id}/on_time_percentage:
+    get:
+      tags:
+        - Statistics
+      summary: Obtener porcentaje de entregas a tiempo en un curso
+      parameters:
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID del curso
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Fecha de inicio (YYYY-MM-DD)
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Fecha de fin (YYYY-MM-DD)
+        - name: group_by
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month, quarter, year]
+          description: Agrupamiento temporal
+      responses:
+        '200':
+          description: Estadísticas de entregas a tiempo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnTimePercentageResponse'
+        '400':
+          description: Parámetros inválidos
+        '404':
+          description: Curso no encontrado
+
+  /course/{course_id}/student/{student_id}/on_time_percentage:
+    get:
+      tags:
+        - Statistics
+      summary: Obtener porcentaje de entregas a tiempo de un estudiante
+      parameters:
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID del curso
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID del estudiante (UUID)
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Fecha de inicio (YYYY-MM-DD)
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Fecha de fin (YYYY-MM-DD)
+        - name: group_by
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month, quarter, year]
+          description: Agrupamiento temporal
+      responses:
+        '200':
+          description: Estadísticas de entregas a tiempo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentOnTimePercentageResponse'
+        '400':
+          description: Parámetros inválidos
+        '404':
+          description: Estudiante o curso no encontrado
+
+  /student/{student_id}/course/{course_id}:
+    get:
+      tags:
+        - Statistics
+      summary: Obtener estadísticas de un estudiante en un curso
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Estadísticas del estudiante
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentCourseStats'
+        '404':
+          description: No se encontraron datos
+
+  /course/{course_id}/task/{task_id}/averages:
+    get:
+      tags:
+        - Statistics
+      summary: Obtener promedios de una tarea específica
+      parameters:
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Promedios de la tarea
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskAverages'
+
+components:
+  schemas:
+    Grade:
+      type: object
+      required:
+        - student_id
+        - course_id
+        - grade
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        course_id:
+          type: string
+        grade:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 10
+        on_time:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+
+    GradeTask:
+      type: object
+      required:
+        - student_id
+        - course_id
+        - task_id
+        - grade
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        course_id:
+          type: string
+        task_id:
+          type: string
+        grade:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 10
+        on_time:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+
+    OnTimePercentageDataItem:
+      type: object
+      properties:
+        period:
+          type: string
+        on_time_count:
+          type: integer
+        total_count:
+          type: integer
+        percentage:
+          type: number
+          format: float
+
+    TimeRange:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+
+    OnTimePercentageResponse:
+      type: object
+      properties:
+        course_id:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnTimePercentageDataItem'
+        time_range:
+          $ref: '#/components/schemas/TimeRange'
+        group_by:
+          type: string
+
+    StudentOnTimePercentageResponse:
+      type: object
+      properties:
+        course_id:
+          type: string
+        student_id:
+          type: string
+          format: uuid
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnTimePercentageDataItem'
+        time_range:
+          $ref: '#/components/schemas/TimeRange'
+        group_by:
+          type: string
+
+
+    StudentCourseStats:
+      type: object
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        course_id:
+          type: string
+        average_grade:
+          type: number
+          format: float
+        assignments_completed:
+          type: integer
+        on_time_percentage:
+          type: number
+          format: float
+
+    TaskAverages:
+      type: object
+      properties:
+        course_id:
+          type: string
+        task_id:
+          type: string
+        group_average:
+          type: number
+          format: float
+        students:
+          type: array
+          items:
+            type: object
+            properties:
+              student_id:
+                type: string
+                format: uuid
+              average_grade:
+                type: number
+                format: float
+              grade_count:
+                type: integer

@@ -118,6 +118,11 @@ func main() {
 		routing.GET("/course/:course_id/task/:task_id/averages", func(c *gin.Context) {
 			handlers.APIHandlerGetTaskAverages(db_ref, c)
 		})
+
+		routing.GET("/course/:course_id/on_time_percentage", handlers.APIHandlerGetCourseOnTimePercentage)
+
+		routing.GET("/course/:course_id/student/:student_id/on_time_percentage", handlers.APIHandlerGetStudentOnTimePercentage)
+    })
 	}
 
 	// Lets log the server start
