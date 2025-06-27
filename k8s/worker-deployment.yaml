@@ -20,7 +20,7 @@ spec:
         imagePullPolicy: Always
         env:
         - name: SERVICE_STATS_POSTGRES_URL
-          value: "host=postgres-service port=5432 user=stats_user password=stats_user_pass dbname=stats_db sslmode=disable"
+          value: "host=my-postgres-postgresql port=5432 user=stats_user password=stats_user_pass dbname=stats_db sslmode=disable"
         - name: ASYNC_QUEUE_HOST
           value: "redis.default.svc.cluster.local"
         - name: ASYNC_QUEUE_PORT
