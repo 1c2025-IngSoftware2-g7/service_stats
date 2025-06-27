@@ -652,3 +652,114 @@ func TestInsertGrade_CommitError(t *testing.T) {
 	assert.EqualError(t, err, "commit failed")
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestGetOnTimeSubmissionPercentageForCourse_WithStartAndEndTime(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	startTime := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	endTime := time.Date(2023, 12, 31, 0, 0, 0, 0, time.UTC)
+
+	// Expected SQL pattern — note we escape parenthesis and ignore spacing
+	mock.ExpectBegin()
+
+	mock.ExpectQuery(`SELECT\s+'all_time'\s+AS\s+period,\s+COUNT\(\*\)\s+FILTER\s+\(WHERE\s+on_time\s+=\s+true\)\s+AS\s+on_time_count,\s+COUNT\(\*\)\s+AS\s+total_count,\s+COALESCE\(\(COUNT\(\*\)\s+FILTER\s+\(WHERE\s+on_time\s+=\s+true\)\s+\*\s+100\.0\s+/\s+NULLIF\(COUNT\(\*\),\s+0\)\),\s+0\)\s+AS\s+percentage\s+FROM\s+grades_tasks\s+WHERE\s+course_id\s+=\s+\$\d+\s+AND\s+created_at\s+>=\s+\$\d+\s+AND\s+created_at\s+<=\s+\$\d+`).
+		WithArgs("course123", startTime, endTime).
+		WillReturnRows(sqlmock.NewRows([]string{"period", "on_time_count", "total_count", "percentage"}).
+			AddRow("2023-01-01T00:00:00Z", 10, 20, 50.0),
+		)
+
+	mock.ExpectCommit()
+
+	results, err := GetOnTimeSubmissionPercentageForCourse(db, "course123", startTime, endTime, "")
+	assert.NoError(t, err)
+	assert.Len(t, results, 1)
+
+	result := results[0]
+	assert.Equal(t, "2023-01-01T00:00:00Z", result["period"])
+	assert.Equal(t, int(10), result["on_time_count"])
+	assert.Equal(t, int(20), result["total_count"])
+	assert.Equal(t, 50.0, result["percentage"])
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetOnTimeSubmissionPercentageForCourse_WithGroupByStartEndTime(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	groupBy := "day"
+	courseID := "course123"
+	startTime := time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC)
+	endTime := time.Date(2023, 6, 30, 0, 0, 0, 0, time.UTC)
+
+	mock.ExpectBegin()
+
+	// Pattern match the query using regex (be lenient on whitespace)
+	mock.ExpectQuery(`SELECT\s+DATE_TRUNC\(\$1,\s+created_at\)\s+AS\s+period,\s+COUNT\(\*\)\s+FILTER\s+\(WHERE\s+on_time\s+=\s+true\)\s+AS\s+on_time_count,\s+COUNT\(\*\)\s+AS\s+total_count,\s+COALESCE\(\(COUNT\(\*\)\s+FILTER\s+\(WHERE\s+on_time\s+=\s+true\)\s+\*\s+100\.0\s+/\s+NULLIF\(COUNT\(\*\),\s+0\)\),\s+0\)\s+AS\s+percentage\s+FROM\s+grades_tasks\s+WHERE\s+course_id\s+=\s+\$\d+\s+AND\s+created_at\s+>=\s+\$\d+\s+AND\s+created_at\s+<=\s+\$\d+\s+GROUP\s+BY\s+period\s+ORDER\s+BY\s+period`).
+		WithArgs(groupBy, courseID, startTime, endTime).
+		WillReturnRows(sqlmock.NewRows([]string{"period", "on_time_count", "total_count", "percentage"}).
+			AddRow(time.Date(2023, 6, 10, 0, 0, 0, 0, time.UTC), 5, 10, 50.0).
+			AddRow(time.Date(2023, 6, 20, 0, 0, 0, 0, time.UTC), 7, 14, 50.0),
+		)
+
+	mock.ExpectCommit()
+
+	results, err := GetOnTimeSubmissionPercentageForCourse(db, courseID, startTime, endTime, groupBy)
+	assert.NoError(t, err)
+	assert.Len(t, results, 2)
+
+	assert.Equal(t, "2023-06-10T00:00:00Z", results[0]["period"])
+	assert.Equal(t, int(5), results[0]["on_time_count"])
+	assert.Equal(t, int(10), results[0]["total_count"])
+	assert.Equal(t, 50.0, results[0]["percentage"])
+
+	assert.Equal(t, "2023-06-20T00:00:00Z", results[1]["period"])
+	assert.Equal(t, int(7), results[1]["on_time_count"])
+	assert.Equal(t, int(14), results[1]["total_count"])
+	assert.Equal(t, 50.0, results[1]["percentage"])
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetOnTimeSubmissionPercentageForStudent_WithGroupByOnly(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	courseID := "course456"
+	studentID := "student789"
+	groupBy := "week"
+	startTime := time.Time{} // zero
+	endTime := time.Time{}   // zero
+
+	mock.ExpectBegin()
+
+	// We expect 3 parameters: groupBy, courseID, studentID
+	mock.ExpectQuery(`SELECT\s+DATE_TRUNC\(\$1,\s*created_at\)\s+AS\s+period,\s+COUNT\(\*\)\s+FILTER\s+\(WHERE\s+on_time\s+=\s+true\)\s+AS\s+on_time_count,\s+COUNT\(\*\)\s+AS\s+total_count,\s+COALESCE\(\(COUNT\(\*\)\s+FILTER\s+\(WHERE\s+on_time\s+=\s+true\)\s+\*\s+100\.0\s*/\s*NULLIF\(COUNT\(\*\),\s*0\)\),\s*0\)\s+AS\s+percentage\s+FROM\s+grades_tasks\s+WHERE\s+course_id\s+=\s+\$\d+\s+AND\s+student_id\s+=\s+\$\d+\s+GROUP\s+BY\s+period\s+ORDER\s+BY\s+period`).
+		WithArgs(groupBy, courseID, studentID).
+		WillReturnRows(sqlmock.NewRows([]string{"period", "on_time_count", "total_count", "percentage"}).
+			AddRow(time.Date(2023, 6, 3, 0, 0, 0, 0, time.UTC), 8, 10, 80.0).
+			AddRow(time.Date(2023, 6, 10, 0, 0, 0, 0, time.UTC), 9, 12, 75.0),
+		)
+
+	mock.ExpectCommit()
+
+	results, err := GetOnTimeSubmissionPercentageForStudent(db, courseID, studentID, startTime, endTime, groupBy)
+	assert.NoError(t, err)
+	assert.Len(t, results, 2)
+
+	assert.Equal(t, "2023-06-03T00:00:00Z", results[0]["period"])
+	assert.Equal(t, int(8), results[0]["on_time_count"])
+	assert.Equal(t, int(10), results[0]["total_count"])
+	assert.Equal(t, 80.0, results[0]["percentage"])
+
+	assert.Equal(t, "2023-06-10T00:00:00Z", results[1]["period"])
+	assert.Equal(t, int(9), results[1]["on_time_count"])
+	assert.Equal(t, int(12), results[1]["total_count"])
+	assert.Equal(t, 75.0, results[1]["percentage"])
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
