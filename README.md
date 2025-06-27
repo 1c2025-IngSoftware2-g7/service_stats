@@ -50,12 +50,18 @@ Adicionalmente, se menciona a continuación lo utilizado dentro de los contenedo
 
 ## 4. CI-CD
 
+[![codecov](https://codecov.io/gh/1c2025-IngSoftware2-g7/service_stats/branch/feature%2Ftests/graph/badge.svg?token=51BR8Q143V)](https://codecov.io/gh/1c2025-IngSoftware2-g7/service_stats)
 
 ### Test coverage
 
 
 ## 5. Tests
 
+Para correr los tests, se puede realizar con el comando
+
+``` go test -coverprofile=coverage.out -covermode=atomic ./internal/... ``` 
+
+Aclaración: Con esto se skipea los directorios donde tiene los archivos ejecutables
 
 ## 6. Comandos para construir la imagen de Docker
 Al utilizar docker-compose, se puede construir todas las imágenes definidas en docker-compose.yml con el siguiente comando:
