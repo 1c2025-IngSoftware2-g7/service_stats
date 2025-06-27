@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"service_stats/internal/model"
 	"testing"
@@ -601,5 +602,53 @@ func TestGetStudentAveragesOverTime(t *testing.T) {
 	assert.Equal(t, 90.0, results[1]["average_grade"])
 	assert.Equal(t, int(1), results[1]["grade_count"])
 
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestInsertGrade_RollbackOnExecError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO grades").
+		WithArgs("student1", "course1", 90.0, true).
+		WillReturnError(errors.New("insert failed"))
+	mock.ExpectRollback()
+
+	grade := model.Grade{
+		StudentID: "student1",
+		CourseID:  "course1",
+		Grade:     90.0,
+		OnTime:    true,
+	}
+
+	err = InsertGrade(db, grade)
+	assert.Error(t, err)
+	assert.EqualError(t, err, "insert failed")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestInsertGrade_CommitError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO grades").
+		WithArgs("student1", "course1", 90.0, true).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit().WillReturnError(errors.New("commit failed"))
+
+	grade := model.Grade{
+		StudentID: "student1",
+		CourseID:  "course1",
+		Grade:     90.0,
+		OnTime:    true,
+	}
+
+	err = InsertGrade(db, grade)
+	assert.Error(t, err)
+	assert.EqualError(t, err, "commit failed")
 	assert.NoError(t, mock.ExpectationsWereMet())
 }

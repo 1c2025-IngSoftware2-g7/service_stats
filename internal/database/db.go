@@ -58,7 +58,7 @@ func InitDB(posgresUrl string) (*sql.DB, error) {
 	return DB, nil
 }
 
-func InsertGrade(db *sql.DB, grade model.Grade) error {
+var InsertGrade = func(db *sql.DB, grade model.Grade) (err error) {
 	tx, err := db.Begin()
 	if err != nil {
 		log.Printf("[Service Stats] Error starting transaction: %v", err)
@@ -245,7 +245,7 @@ var GetCourseAveragesOverTime = func(DB *sql.DB, courseID string, startTime, end
 }
 
 // InsertGradeTask inserts a new grade task
-func InsertGradeTask(DB *sql.DB, grade model.GradeTask) error {
+var InsertGradeTask = func(DB *sql.DB, grade model.GradeTask) error {
 	tx, err := DB.Begin()
 	if err != nil {
 		return err
