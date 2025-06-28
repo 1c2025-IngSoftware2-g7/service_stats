@@ -25,8 +25,10 @@ func NewMux(database_ref *sql.DB) *asynq.ServeMux {
 }
 
 var (
-	InsertGradeFunc     = database.InsertGrade
-	InsertGradeTaskFunc = database.InsertGradeTask
+	InsertGradeFunc      = database.InsertGrade
+	InsertGradeTask      = database.InsertGradeTask
+	UpdateGradeTask      = database.UpdateGradeTask
+	CheckGradeTaskExists = database.CheckGradeTaskExists
 )
 
 func HandleAddStadisticForStudent(ctx context.Context, t *asynq.Task) error {
@@ -55,14 +57,14 @@ func HandleAddGradeTask(ctx context.Context, t *asynq.Task) error {
 
 	log.Printf("Processing grade task: %s with payload: %+v", t.Type(), p)
 
-	exists, err := database.CheckGradeTaskExists(p.StudentID, p.CourseID, p.TaskID)
+	exists, err := CheckGradeTaskExists(db, p.StudentID, p.CourseID, p.TaskID)
 	if err != nil {
 		log.Printf("[ERROR] Checking grade task existence: %v", err)
 		return err
 	}
 
 	if exists {
-		err = database.UpdateGradeTask(p)
+		err = UpdateGradeTask(db, p)
 		if err != nil {
 			log.Printf("[ERROR] Updating grade task: %v", err)
 			return err
@@ -70,7 +72,7 @@ func HandleAddGradeTask(ctx context.Context, t *asynq.Task) error {
 		log.Printf("Grade task UPDATED - Student: %s, Course: %s, Task: %s, Grade: %.2f, OnTime: %t",
 			p.StudentID, p.CourseID, p.TaskID, p.Grade, p.OnTime)
 	} else {
-		err = database.InsertGradeTask(p)
+		err = InsertGradeTask(db, p)
 		if err != nil {
 			log.Printf("[ERROR] Inserting grade task: %v", err)
 			return err

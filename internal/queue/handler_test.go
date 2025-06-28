@@ -59,13 +59,29 @@ func TestHandleAddStadisticForStudent_DBError(t *testing.T) {
 
 func TestHandleAddGradeTask(t *testing.T) {
 	mockCalled := false
-	InsertGradeTaskFunc = func(db *sql.DB, gt model.GradeTask) error {
+	InsertGradeTask = func(db *sql.DB, gt model.GradeTask) error {
 		mockCalled = true
 		assert.Equal(t, "task1", gt.TaskID)
 		return nil
 	}
+
+	UpdateGradeTask = func(db *sql.DB, gt model.GradeTask) error {
+		mockCalled = true
+		assert.Equal(t, "", gt.TaskID)
+		return nil
+	}
+
+	CheckGradeTaskExists = func(db *sql.DB, studentID, courseID, taskID string) (bool, error) {
+		assert.Equal(t, "", studentID)
+		assert.Equal(t, "", courseID)
+		assert.Equal(t, "task1", taskID)
+		return false, nil
+	}
+
 	defer func() {
-		InsertGradeTaskFunc = database.InsertGradeTask
+		InsertGradeTask = database.InsertGradeTask
+		UpdateGradeTask = database.UpdateGradeTask
+		CheckGradeTaskExists = database.CheckGradeTaskExists
 	}()
 
 	payload, _ := json.Marshal(model.GradeTask{TaskID: "task1", Grade: 85})
@@ -84,11 +100,22 @@ func TestHandleAddGradeTask_BadJSON(t *testing.T) {
 }
 
 func TestHandleAddGradeTask_DBError(t *testing.T) {
-	InsertGradeTaskFunc = func(db *sql.DB, gt model.GradeTask) error {
+	InsertGradeTask = func(db *sql.DB, gt model.GradeTask) error {
 		return errors.New("db error")
 	}
+
+	UpdateGradeTask = func(db *sql.DB, gt model.GradeTask) error {
+		return errors.New("db error")
+	}
+
+	CheckGradeTaskExists = func(db *sql.DB, studentID, courseID, taskID string) (bool, error) {
+		return false, nil
+	}
+
 	defer func() {
-		InsertGradeTaskFunc = database.InsertGradeTask
+		InsertGradeTask = database.InsertGradeTask
+		UpdateGradeTask = database.UpdateGradeTask
+		CheckGradeTaskExists = database.CheckGradeTaskExists
 	}()
 
 	payload, _ := json.Marshal(model.GradeTask{TaskID: "task1", Grade: 85})
