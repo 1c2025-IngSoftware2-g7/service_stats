@@ -640,13 +640,22 @@ var GetOnTimeSubmissionPercentageForStudent = func(DB *sql.DB, courseID, student
 }
 
 // CheckGradeTaskExists verifica si ya existe un registro para esta combinación
-func CheckGradeTaskExists(studentID, courseID, taskID string) (bool, error) {
+var CheckGradeTaskExists = func(DB *sql.DB, studentID, courseID, taskID string) (bool, error) {
+
+	tx, err_db_begin := DB.Begin()
+
+	if err_db_begin != nil {
+		log.Printf("[Service Stats] Error starting transaction: %v", err_db_begin)
+		return false, err_db_begin
+	}
+
 	var exists bool
 	query := `SELECT EXISTS(
         SELECT 1 FROM grades_tasks
         WHERE student_id = $1 AND course_id = $2 AND task_id = $3
     )`
-	err := DB.QueryRow(query, studentID, courseID, taskID).Scan(&exists)
+	err := tx.QueryRow(query, studentID, courseID, taskID).Scan(&exists)
+
 	if err != nil {
 		return false, err
 	}
@@ -654,12 +663,19 @@ func CheckGradeTaskExists(studentID, courseID, taskID string) (bool, error) {
 }
 
 // UpdateGradeTask actualiza un registro existente
-func UpdateGradeTask(grade model.GradeTask) error {
+var UpdateGradeTask = func(DB *sql.DB, grade model.GradeTask) error {
+	tx, err := DB.Begin()
+
+	if err != nil {
+		log.Printf("[Service Stats] Failed to begin transaction: %v", err)
+		return err
+	}
+
 	statement := `UPDATE grades_tasks
                  SET grade = $4, on_time = $5, created_at = NOW()
                  WHERE student_id = $1 AND course_id = $2 AND task_id = $3`
 
-	_, err := DB.Exec(
+	_, err = tx.Exec(
 		statement,
 		grade.StudentID,
 		grade.CourseID,
@@ -669,8 +685,15 @@ func UpdateGradeTask(grade model.GradeTask) error {
 	)
 
 	if err != nil {
-		log.Printf("[Service Stats] Error updating grade task: %v", err)
+		log.Printf("[Service Stats] Error executing update: %v", err)
+		_ = tx.Rollback()
 		return err
 	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("[Service Stats] Failed to commit transaction: %v", err)
+		return err
+	}
+
 	return nil
 }

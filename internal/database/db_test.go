@@ -763,3 +763,230 @@ func TestGetOnTimeSubmissionPercentageForStudent_WithGroupByOnly(t *testing.T) {
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+/*func TestCheckGradeTaskExists(t *testing.T) {
+	// Create sqlmock database connection and mock object
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to open sqlmock database: %v", err)
+	}
+	defer db.Close()
+
+	// Expect the transaction begin
+	mock.ExpectBegin()
+
+	// Expect the SELECT EXISTS query
+	mock.ExpectQuery(`SELECT EXISTS\(`). // use regex to match query
+						WithArgs("student123", "course456", "task789").
+						WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+
+	// Because your function does not commit/rollback for SELECT, you may need to expect nothing else.
+	// If you do want to test rollback/commit, you’d need to modify your function.
+
+	// Call your function
+	exists, err := CheckGradeTaskExists(db, "student123", "course456", "task789")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !exists {
+		t.Fatalf("expected exists = true, got false")
+	}
+
+	// Ensure all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet sqlmock expectations: %v", err)
+	}
+}*/
+
+func TestCheckGradeTaskExists(t *testing.T) {
+	tests := []struct {
+		name         string
+		studentID    string
+		courseID     string
+		taskID       string
+		expectExists bool
+		expectError  bool
+		setupMock    func(sqlmock.Sqlmock)
+	}{
+		{
+			name:         "grade task exists",
+			studentID:    "stu1",
+			courseID:     "course1",
+			taskID:       "task1",
+			expectExists: true,
+			expectError:  false,
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectBegin()
+				mock.ExpectQuery(`SELECT EXISTS\(`).
+					WithArgs("stu1", "course1", "task1").
+					WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+			},
+		},
+		{
+			name:         "grade task does not exist",
+			studentID:    "stu2",
+			courseID:     "course2",
+			taskID:       "task2",
+			expectExists: false,
+			expectError:  false,
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectBegin()
+				mock.ExpectQuery(`SELECT EXISTS\(`).
+					WithArgs("stu2", "course2", "task2").
+					WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+			},
+		},
+		{
+			name:         "query error",
+			studentID:    "stu3",
+			courseID:     "course3",
+			taskID:       "task3",
+			expectExists: false,
+			expectError:  true,
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectBegin()
+				mock.ExpectQuery(`SELECT EXISTS\(`).
+					WithArgs("stu3", "course3", "task3").
+					WillReturnError(errors.New("query failed"))
+			},
+		},
+		{
+			name:         "transaction begin fails",
+			studentID:    "stu4",
+			courseID:     "course4",
+			taskID:       "task4",
+			expectExists: false,
+			expectError:  true,
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectBegin().WillReturnError(errors.New("tx begin failed"))
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("failed to create sqlmock: %v", err)
+			}
+			defer db.Close()
+
+			tc.setupMock(mock)
+
+			exists, err := CheckGradeTaskExists(db, tc.studentID, tc.courseID, tc.taskID)
+
+			if (err != nil) != tc.expectError {
+				t.Errorf("expected error = %v, got %v", tc.expectError, err)
+			}
+
+			if exists != tc.expectExists {
+				t.Errorf("expected exists = %v, got %v", tc.expectExists, exists)
+			}
+
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Errorf("unmet expectations: %v", err)
+			}
+		})
+	}
+}
+
+func TestUpdateGradeTask(t *testing.T) {
+	tests := []struct {
+		name        string
+		grade       model.GradeTask
+		expectError bool
+		setupMock   func(sqlmock.Sqlmock)
+	}{
+		{
+			name: "success",
+			grade: model.GradeTask{
+				StudentID: "stu1",
+				CourseID:  "course1",
+				TaskID:    "task1",
+				Grade:     95.0,
+				OnTime:    true,
+			},
+			expectError: false,
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectBegin()
+				mock.ExpectExec(`UPDATE grades_tasks`).
+					WithArgs("stu1", "course1", "task1", 95.0, true).
+					WillReturnResult(sqlmock.NewResult(1, 1))
+				mock.ExpectCommit()
+			},
+		},
+		{
+			name: "begin transaction fails",
+			grade: model.GradeTask{
+				StudentID: "stu2",
+				CourseID:  "course2",
+				TaskID:    "task2",
+				Grade:     80.0,
+				OnTime:    false,
+			},
+			expectError: true,
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectBegin().WillReturnError(errors.New("begin failed"))
+			},
+		},
+		{
+			name: "exec update fails",
+			grade: model.GradeTask{
+				StudentID: "stu3",
+				CourseID:  "course3",
+				TaskID:    "task3",
+				Grade:     70.0,
+				OnTime:    true,
+			},
+			expectError: true,
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectBegin()
+				mock.ExpectExec(`UPDATE grades_tasks`).
+					WithArgs("stu3", "course3", "task3", 70.0, true).
+					WillReturnError(errors.New("update failed"))
+				mock.ExpectRollback()
+			},
+		},
+		{
+			name: "commit fails",
+			grade: model.GradeTask{
+				StudentID: "stu4",
+				CourseID:  "course4",
+				TaskID:    "task4",
+				Grade:     60.0,
+				OnTime:    false,
+			},
+			expectError: true,
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectBegin()
+				mock.ExpectExec(`UPDATE grades_tasks`).
+					WithArgs("stu4", "course4", "task4", 60.0, false).
+					WillReturnResult(sqlmock.NewResult(1, 1))
+				mock.ExpectCommit().WillReturnError(errors.New("commit failed"))
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("failed to create sqlmock: %v", err)
+			}
+			defer db.Close()
+
+			tc.setupMock(mock)
+
+			err = UpdateGradeTask(db, tc.grade)
+
+			if (err != nil) != tc.expectError {
+				t.Errorf("expected error = %v, got %v", tc.expectError, err)
+			}
+
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Errorf("unmet expectations: %v", err)
+			}
+		})
+	}
+}
