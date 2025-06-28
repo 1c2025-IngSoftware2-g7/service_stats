@@ -4,6 +4,7 @@ import (
 	//"unicode"
 
 	"database/sql"
+	"log"
 	"net/http"
 	"service_stats/internal/database"
 	"time"
@@ -143,6 +144,8 @@ func APIHandlerGetStudentAverageOverTime(db *sql.DB, c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
 		return
 	}
+
+	log.Println("Fetching averages for student:", studentID, "from", startTime, "to", endTime, "grouped by", req.GroupBy)
 
 	averages, err := database.GetStudentAveragesOverTime(db, studentID, startTime, endTime, req.GroupBy)
 	if err != nil {

@@ -10,8 +10,8 @@ import (
 	"service_stats/internal/queue"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/newrelic/go-agent/v3/newrelic"
-	//"github.com/joho/godotenv"
 )
 
 /*
@@ -55,11 +55,11 @@ func main() {
 func main() {
 
 	// Load environment variables from .env file
-	// err_env := godotenv.Load()
+	err_env := godotenv.Load()
 
-	// if err_env != nil {
-	// 	log.Fatal("[Stats Service] Error loading .env file: ", err_env)
-	// }
+	if err_env != nil {
+		log.Printf("[Stats Service] It seems no .env file loaded, so working with default ENV variables")
+	}
 
 	// Initialize New Relic
 	newRelicApp, err_relic := newrelic.NewApplication(

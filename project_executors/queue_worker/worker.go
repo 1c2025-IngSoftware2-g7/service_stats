@@ -9,15 +9,15 @@ import (
 	"service_stats/internal/queue"
 
 	"github.com/hibiken/asynq"
-	// "github.com/joho/godotenv"
+	"github.com/joho/godotenv"
 )
 
 func main() {
 	// Load environment variables from .env file
-	// err_env := godotenv.Load()
-	// if err_env != nil {
-	// 	log.Fatal("[Worker queue] Error loading .env file: ", err_env)
-	// }
+	err_env := godotenv.Load()
+	if err_env != nil {
+		log.Printf("[Worker queue] No .env file, working with default environment variables")
+	}
 
 	database_url := os.Getenv("SERVICE_STATS_POSTGRES_URL")
 
