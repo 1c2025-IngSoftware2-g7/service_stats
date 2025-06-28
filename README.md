@@ -60,6 +60,11 @@ En este microservicio intentamos ir por la idea de arquitectura de capas, donde 
 
 ## 5. Tests
 
+Para correr los tests, se puede realizar con el comando
+
+``` go test -coverprofile=coverage.out -covermode=atomic ./internal/... ``` 
+
+Aclaración: Con esto se skipea los directorios donde tiene los archivos ejecutables
 
 ## 6. Comandos para construir la imagen de Docker
 Al utilizar docker-compose, se puede construir todas las imágenes definidas en docker-compose.yml con el siguiente comando:

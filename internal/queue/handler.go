@@ -49,15 +49,34 @@ func HandleAddStadisticForStudent(ctx context.Context, t *asynq.Task) error {
 func HandleAddGradeTask(ctx context.Context, t *asynq.Task) error {
 	var p model.GradeTask
 	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		log.Printf("[ERROR] Failed to unmarshal task payload: %v", err)
 		return err
 	}
 
 	log.Printf("Processing grade task: %s with payload: %+v", t.Type(), p)
 
-	err := InsertGradeTaskFunc(db, p)
+	exists, err := database.CheckGradeTaskExists(p.StudentID, p.CourseID, p.TaskID)
 	if err != nil {
-		log.Printf("Failed to insert grade task for %v: %v", p, err)
+		log.Printf("[ERROR] Checking grade task existence: %v", err)
 		return err
+	}
+
+	if exists {
+		err = database.UpdateGradeTask(p)
+		if err != nil {
+			log.Printf("[ERROR] Updating grade task: %v", err)
+			return err
+		}
+		log.Printf("Grade task UPDATED - Student: %s, Course: %s, Task: %s, Grade: %.2f, OnTime: %t",
+			p.StudentID, p.CourseID, p.TaskID, p.Grade, p.OnTime)
+	} else {
+		err = database.InsertGradeTask(p)
+		if err != nil {
+			log.Printf("[ERROR] Inserting grade task: %v", err)
+			return err
+		}
+		log.Printf("Grade task INSERTED - Student: %s, Course: %s, Task: %s, Grade: %.2f, OnTime: %t",
+			p.StudentID, p.CourseID, p.TaskID, p.Grade, p.OnTime)
 	}
 
 	return nil

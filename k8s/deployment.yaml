@@ -22,7 +22,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: SERVICE_STATS_POSTGRES_URL
-              value: "host=postgres-service port=5432 user=stats_user password=stats_user_pass dbname=stats_db sslmode=disable"
+              value: "host=my-postgres-postgresql port=5432 user=stats_user password=stats_user_pass dbname=stats_db sslmode=disable"
             - name: NEW_RELIC_LICENSE_KEY
               value: "660128f2db4928bcddbbd4976fd21768FFFFNRAL"
             - name: NEW_RELIC_APP_NAME
