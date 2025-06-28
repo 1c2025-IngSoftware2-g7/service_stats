@@ -26,7 +26,7 @@ El servicio permite:
 El servicio consta de:
     - Base de datos (PostgreSQL) : Donde se guardan las estadísticas tanto de usuarios/estudiantes
     - Redis: Se utiliza para la ejecución de cola de tareas
-    - api main: Donde se hace un handler de cada endpoint para la obtencion/insersión de estádisticas
+    - Api Wain: Donde se hace un handler de cada endpoint para la obtencion/insersión de estádisticas
     - Worker: Aplicación exclusiva que se encarga de procesar las tareas previamente
 
 ## 3. Pre-requisitos y detalles de arquitectura
@@ -73,6 +73,9 @@ docker compose build
 ```
 
 ## 7. Comandos para correr la base de datos
+
+> CONSEJO: Si se tiene instalado Postgresql y redis, pausar ambos servicios (sudo systemctl stop postgresql/redis)
+
 Como ya se mencionó, se utilizó docker compose para correr el servicio de forma local. Por lo que para levantar todas las imágenes del proyecto, se debe correr:
 ```bash
 docker compose up
@@ -95,8 +98,10 @@ En ```docker-compose.yml```:
 
 ## 9. Despliegue en la Nube 
 
-TBD
+Al momento de presentar este proyecto, el servicio se encuentra deployeado en kubernetes en [http://34.61.96.62](http://34.61.96.62)
 
 ## 10. Analisis postmortem
 
-A explicar mas llegado el momento.
+La mayor complicación fue el mockeo para hacer las pruebas de la database. Inicialmente, teniamos funciones estaablecidas con handlers,
+pero para luego mockear la database, se tuvo que hacer interfaces de esas funciones (esto quedó registrado en el desarrollo de las ramas
+origin/main y feature/test a lo largo de toda la vida del microservicio), pero esto pasó debido a la inexperiencia en desarrollo de Golang.
