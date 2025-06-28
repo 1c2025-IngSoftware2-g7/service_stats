@@ -7,14 +7,16 @@ info:
 tags:
   - name: Health
     description: Health Checkpoints for the service
-  - name: Statistics
-    description: Operaciones relacionadas con estadísticas de cursos y estudiantes
-  - name: Grades
-    description: Operaciones relacionadas con calificaciones
+  - name: User Stats
+    description: Operaciones relacionadas a las estadisticas de usuario
+  - name: Course Stats
+    description: Operaciones relacionadas a las estadisticas de un curso
 
 servers:
   - url: http://localhost:8080/stats
   - url: https://service-api-stats.onrender.com
+  - url: https://34.61.96.62
+   
 
 paths:
   /health:
@@ -37,7 +39,7 @@ paths:
   /student/grade:
     post:
       tags:
-        - Grades
+        - User Stats
       summary: Registrar una nueva calificación (asíncrono)
       requestBody:
         required: true
@@ -64,7 +66,7 @@ paths:
   /student/task/grade:
     post:
       tags:
-        - Grades
+        - User Stats
       summary: Registrar calificación de tarea (asíncrono)
       requestBody:
         required: true
@@ -81,7 +83,7 @@ paths:
   /course/{course_id}/on_time_percentage:
     get:
       tags:
-        - Statistics
+        - Course Stats
       summary: Obtener porcentaje de entregas a tiempo en un curso
       parameters:
         - name: course_id
@@ -123,7 +125,8 @@ paths:
   /course/{course_id}/student/{student_id}/on_time_percentage:
     get:
       tags:
-        - Statistics
+        - Course Stats
+        - User Stats
       summary: Obtener porcentaje de entregas a tiempo de un estudiante
       parameters:
         - name: course_id
@@ -172,7 +175,8 @@ paths:
   /student/{student_id}/course/{course_id}:
     get:
       tags:
-        - Statistics
+        - Course Stats
+        - User Stats
       summary: Obtener estadísticas de un estudiante en un curso
       parameters:
         - name: student_id
@@ -199,7 +203,7 @@ paths:
   /course/{course_id}/task/{task_id}/averages:
     get:
       tags:
-        - Statistics
+        - Course Stats
       summary: Obtener promedios de una tarea específica
       parameters:
         - name: course_id
@@ -220,6 +224,138 @@ paths:
               schema:
                 $ref: '#/components/schemas/TaskAverages'
 
+  /student/{student_id}/course/{course_id}/task/average:
+    get:
+      tags:
+        - Course Stats
+        - User Stats
+      summary: Obtener promedio de calificaciones de un estudiante en una tarea específica
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: task_id
+          in: query
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Promedio de calificaciones del estudiante en la tarea
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  student_id:
+                    type: string
+                    format: uuid
+                  course_id:
+                    type: string
+                  student_average:
+                    type: number
+                    format: float
+                  other_students:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        student_id:
+                          type: string
+                          format: uuid
+                        average_grade:
+                          type: number
+                          format: float
+                        grade_count:
+                          type: integer
+        '404':
+          description: No grades found for the requested student
+        '500':
+          description: Internal server error
+
+  /course/{course_id}/average:
+    get:
+      tags:
+        - Course Stats
+      summary: Obtener promedio de calificaciones de un curso
+      parameters:
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Promedio de calificaciones del curso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  course_id:
+                    type: string
+                  average_grade:
+                    type: number
+                    format: float
+                  total_students:
+                    type: integer
+        '404':
+          description: Curso no encontrado
+        '400':
+          description: Parámetros inválidos
+        '500':
+          description: Error interno del servidor
+          
+  /student/{student_id}/average:
+    get:
+      tags:
+        - User Stats
+      summary: Obtener promedio de calificaciones de un estudiante
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+
+      responses:
+        '200':
+          description: Promedio de calificaciones del estudiante
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  student_id:
+                    type: string
+                    format: uuid
+                  averages:
+                    type: number
+                    format: float
+                  time_range:
+                    type: object
+                    properties:
+                      start:
+                        type: string
+                        format: date-time
+                      end:
+                        type: string
+                        format: date-time
+        '404':
+          description: Estudiante no encontrado
+        '400':
+          description: Parámetros inválidos
+          
 components:
   schemas:
     Grade:
