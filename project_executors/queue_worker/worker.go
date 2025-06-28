@@ -9,15 +9,15 @@ import (
 	"service_stats/internal/queue"
 
 	"github.com/hibiken/asynq"
-	// "github.com/joho/godotenv"
+	"github.com/joho/godotenv"
 )
 
 func main() {
 	// Load environment variables from .env file
-	// err_env := godotenv.Load()
-	// if err_env != nil {
-	// 	log.Fatal("[Worker queue] Error loading .env file: ", err_env)
-	// }
+	err_env := godotenv.Load()
+	if err_env != nil {
+		log.Printf("[Worker queue] No .env file, working with default environment variables")
+	}
 
 	database_url := os.Getenv("SERVICE_STATS_POSTGRES_URL")
 
@@ -28,7 +28,7 @@ func main() {
 	// Initialize the database connection with internal/database/db.go
 
 	log.Printf("[Worker queue] Initializing database connection to [%s]", database_url)
-	err := database.InitDB(database_url)
+	db_ref, err := database.InitDB(database_url)
 
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
@@ -42,7 +42,7 @@ func main() {
 		asynq.Config{Concurrency: 10},
 	)
 
-	mux := queue.NewMux()
+	mux := queue.NewMux(db_ref)
 
 	if err := srv.Run(mux); err != nil {
 		log.Fatalf("[Worker queue] Could not run worker: %v", err)

@@ -1,16 +1,24 @@
-FROM golang:1.24 as builder
+FROM golang:1.24-alpine AS builder
+
+ENV CGO_ENABLED=0
 
 WORKDIR /app
 
+RUN apk add --no-cache git
+
 RUN go install github.com/hibiken/asynqmon/cmd/asynqmon@latest
 
-FROM ubuntu:22.04
+FROM alpine:latest
 
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates && \
+    addgroup -S appgroup && adduser -S appuser -G appgroup
+
+WORKDIR /app
 
 COPY --from=builder /go/bin/asynqmon /usr/local/bin/asynqmon
+
+USER appuser
 
 EXPOSE 2222
 
 CMD ["asynqmon", "-port=2222", "-redis-addr=redis:6379", "-enable-metrics-exporter"]
-

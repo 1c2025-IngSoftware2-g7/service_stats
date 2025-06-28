@@ -10,18 +10,56 @@ import (
 	"service_stats/internal/queue"
 
 	"github.com/gin-gonic/gin"
-	//"github.com/joho/godotenv"
+	"github.com/joho/godotenv"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
+
+/*
+func setupRouter(nrApp monitoring.Application) *gin.Engine {
+	router := gin.Default()
+
+	router.Use(func(c *gin.Context) {
+		txn := nrApp.StartTransaction(c.FullPath())
+		defer txn.End()
+
+		c.Set("newrelic.Transaction", txn)
+		c.Next()
+	})
+
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	return router
+}
+func main() {
+	newRelicApp, err := newrelic.NewApplication(
+		newrelic.ConfigAppName("MyApp"),
+		newrelic.ConfigLicense("your_license_key_here"),
+	)
+	if err != nil {
+		log.Fatal("New Relic initialization error:", err)
+	}
+
+	appWrapper := &monitoring.NewRelicApp{
+		App: newRelicApp,
+	}
+
+	router := setupRouter(appWrapper)
+
+	log.Println("Starting server on :8080")
+	router.Run(":8080")
+}
+*/
 
 func main() {
 
 	// Load environment variables from .env file
-	// err_env := godotenv.Load()
+	err_env := godotenv.Load()
 
-	// if err_env != nil {
-	// 	log.Fatal("[Stats Service] Error loading .env file: ", err_env)
-	// }
+	if err_env != nil {
+		log.Printf("[Stats Service] It seems no .env file loaded, so working with default ENV variables")
+	}
 
 	// Initialize New Relic
 	newRelicApp, err_relic := newrelic.NewApplication(
@@ -63,10 +101,10 @@ func main() {
 	// Initialize the database connection with internal/database/db.go
 
 	log.Printf("[Main APP] Initializing database connection to [%s]", database_url)
-	err := database.InitDB(database_url)
+	db_ref, err_creating := database.InitDB(database_url)
 
-	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+	if err_creating != nil {
+		log.Fatalf("Failed to initialize database: %v", err_creating)
 	}
 
 	{
@@ -83,16 +121,22 @@ func main() {
 				c.JSON(400, gin.H{"error": "Invalid input"})
 				return
 			}
-
+			log.Printf("[Stats Service] Received task grade: %+v", grade)
 			// Enqueue the task to add student grade
 			handlers.EnqueueAddStadisticForStudent(c, enqueuer, grade)
 		})
 
-		routing.GET("/student/:student_id/course/:course_id", handlers.APIHandlerGetStatsForStudent)
+		routing.GET("/student/:student_id/course/:course_id", func(c *gin.Context) {
+			handlers.APIHandlerGetStatsForStudent(db_ref, c)
+		})
 
 		// Endpoints individuales
-		routing.GET("/student/:student_id/average", handlers.APIHandlerGetStudentAverageOverTime)
-    	routing.GET("/course/:course_id/average", handlers.APIHandlerGetCourseAverageOverTime)
+		routing.GET("/student/:student_id/average", func(c *gin.Context) {
+			handlers.APIHandlerGetStudentAverageOverTime(db_ref, c)
+		})
+		routing.GET("/course/:course_id/average", func(c *gin.Context) {
+			handlers.APIHandlerGetCourseAverageOverTime(db_ref, c)
+		})
 
 		routing.POST("/student/task/grade", func(c *gin.Context) {
 			var gradeTask model.GradeTask
@@ -100,18 +144,27 @@ func main() {
 				c.JSON(400, gin.H{"error": "Invalid input"})
 				return
 			}
+			log.Printf("[Stats Service] Received task grade: %+v", gradeTask)
 			handlers.EnqueueAddGradeTask(c, enqueuer, gradeTask)
 
-		//routing.GET("/student/:student_id/course/:course_id/task/:task_id", handlers.APIHandlerGetStatsForStudentTask)
+			//routing.GET("/student/:student_id/course/:course_id/task/:task_id", handlers.APIHandlerGetStatsForStudentTask)
+		})
 
-		routing.GET("/student/:student_id/course/:course_id/task/average", handlers.APIHandlerGetStudentCourseTasksAverage)
+		routing.GET("/student/:student_id/course/:course_id/task/average", func(c *gin.Context) {
+			handlers.APIHandlerGetStudentCourseTasksAverage(db_ref, c)
+		})
 
-		routing.GET("/course/:course_id/task/:task_id/averages", handlers.APIHandlerGetTaskAverages)
+		routing.GET("/course/:course_id/task/:task_id/averages", func(c *gin.Context) {
+			handlers.APIHandlerGetTaskAverages(db_ref, c)
+		})
 
-		routing.GET("/course/:course_id/on_time_percentage", handlers.APIHandlerGetCourseOnTimePercentage)
+		routing.GET("/course/:course_id/on_time_percentage", func(c *gin.Context) {
+			handlers.APIHandlerGetCourseOnTimePercentage(db_ref, c)
+		})
 
-		routing.GET("/course/:course_id/student/:student_id/on_time_percentage", handlers.APIHandlerGetStudentOnTimePercentage)
-    })
+		routing.GET("/course/:course_id/student/:student_id/on_time_percentage", func(c *gin.Context) {
+			handlers.APIHandlerGetStudentOnTimePercentage(db_ref, c)
+		})
 	}
 
 	// Lets log the server start

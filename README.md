@@ -3,13 +3,14 @@
 ## Contenidos
 1. Introducción
 2. Arquitectura de componentes
-3. Pre-requisitos
+3. Pre-requisitos y detalles de arquitectura
 4. CI-CD
 5. Tests
 6. Comandos para construir la imagen de Docker
 7. Comandos para correr la base de datos
 8. Comandos para correr la imagen del servicio
 9. Despliegue en la Nube 
+10. Analisis postmortem
 
 ## 1. Introducción
 
@@ -25,10 +26,10 @@ El servicio permite:
 El servicio consta de:
     - Base de datos (PostgreSQL) : Donde se guardan las estadísticas tanto de usuarios/estudiantes
     - Redis: Se utiliza para la ejecución de cola de tareas
-    - api main: Donde se hace un handler de cada endpoint para la obtencion/insersión de estádisticas
+    - Api Wain: Donde se hace un handler de cada endpoint para la obtencion/insersión de estádisticas
     - Worker: Aplicación exclusiva que se encarga de procesar las tareas previamente
 
-## 3. Pre-requisitos
+## 3. Pre-requisitos y detalles de arquitectura
 - Necesario para levantar el entorno de desarrollo de forma local:
     - [Docker](https://docs.docker.com/get-started/introduction/) (version 27.3.1) 
     - [Docker-compose](https://docs.docker.com/compose/install/) (version 2.30.3)
@@ -46,6 +47,8 @@ Adicionalmente, se menciona a continuación lo utilizado dentro de los contenedo
 
 - Base de datos:
     - PostgreSQL 14 (imagen oficial).
+
+En este microservicio intentamos ir por la idea de arquitectura de capas, donde la responsabilidad está distribuida, y sea la api o worker quien desea consumirlas, pueden acceder sin impedimentos.
 
 
 ## 4. CI-CD
@@ -70,6 +73,9 @@ docker compose build
 ```
 
 ## 7. Comandos para correr la base de datos
+
+> CONSEJO: Si se tiene instalado Postgresql y redis, pausar ambos servicios (sudo systemctl stop postgresql/redis)
+
 Como ya se mencionó, se utilizó docker compose para correr el servicio de forma local. Por lo que para levantar todas las imágenes del proyecto, se debe correr:
 ```bash
 docker compose up
@@ -92,5 +98,10 @@ En ```docker-compose.yml```:
 
 ## 9. Despliegue en la Nube 
 
-TBD
+Al momento de presentar este proyecto, el servicio se encuentra deployeado en kubernetes en [http://34.61.96.62](http://34.61.96.62)
 
+## 10. Analisis postmortem
+
+La mayor complicación fue el mockeo para hacer las pruebas de la database. Inicialmente, teniamos funciones estaablecidas con handlers,
+pero para luego mockear la database, se tuvo que hacer interfaces de esas funciones (esto quedó registrado en el desarrollo de las ramas
+origin/main y feature/test a lo largo de toda la vida del microservicio), pero esto pasó debido a la inexperiencia en desarrollo de Golang.
