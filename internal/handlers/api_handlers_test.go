@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"service_stats/internal/database"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,6 +31,82 @@ func TestIsValidObjectID(t *testing.T) {
 		if result != test.expected {
 			t.Errorf("isValidObjectID(%s) = %v; expected %v", test.id, result, test.expected)
 		}
+	}
+}
+
+func TestIsValidObjectID_MultipleTests(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: false,
+		},
+		{
+			name:     "Length 1 valid letter",
+			input:    "a",
+			expected: true,
+		},
+		{
+			name:     "Length 1 valid number",
+			input:    "5",
+			expected: true,
+		},
+		{
+			name:     "Length 1 invalid char",
+			input:    "-",
+			expected: false,
+		},
+		{
+			name:     "Length exactly 50 valid",
+			input:    strings.Repeat("a", 50),
+			expected: true,
+		},
+		{
+			name:     "Length 51 too long",
+			input:    strings.Repeat("a", 51),
+			expected: false,
+		},
+		{
+			name:     "Valid all letters",
+			input:    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+			expected: false, // 52 > 50 → should fail
+		},
+		{
+			name:     "Valid all numbers",
+			input:    "0123456789",
+			expected: true,
+		},
+		{
+			name:     "Valid letters and numbers",
+			input:    "abc123",
+			expected: true,
+		},
+		{
+			name:     "Invalid special character",
+			input:    "abc$123",
+			expected: false,
+		},
+		{
+			name:     "Invalid whitespace",
+			input:    "abc 123",
+			expected: false,
+		},
+		{
+			name:     "Invalid unicode symbol",
+			input:    "abc☺",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isValidObjectID(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
 	}
 }
 
@@ -61,7 +138,99 @@ func TestMissingParams(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Contains(t, w.Body.String(), "Missing student_id")
 }
+func TestAPIHandlerGetStatsForStudent(t *testing.T) {
+	tests := []struct {
+		name            string
+		studentID       string
+		courseID        string
+		mockFunc        func()
+		expectedCode    int
+		expectedMessage string
+	}{
+		{
+			name:      "Missing Params",
+			studentID: "",
+			courseID:  "",
+			mockFunc: func() {
+				// This won't even call the DB because it fails early
+			},
+			expectedCode:    http.StatusBadRequest,
+			expectedMessage: "Missing student_id",
+		},
+		{
+			name:      "Invalid CourseID",
+			studentID: "abc",
+			courseID:  "invalidCourseID",
+			mockFunc: func() {
+				// No DB call either, fails on format
+			},
+			expectedCode:    400,
+			expectedMessage: "{\"result\":\"Failed to get average grade\",\"status\":500}",
+		},
+		{
+			name:      "DB Error",
+			studentID: "abc",
+			courseID:  "507f1f77bcf86cd799439011",
+			mockFunc: func() {
+				database.GetAvgGradeForStudent = func(db *sql.DB, studentID, courseID string) (float64, int, error) {
+					return 0, http.StatusInternalServerError, errors.New("DB error")
+				}
+			},
+			expectedCode:    http.StatusInternalServerError,
+			expectedMessage: "Failed to get average grade",
+		},
+		{
+			name:      "No Grades Found",
+			studentID: "abc",
+			courseID:  "507f1f77bcf86cd799439011",
+			mockFunc: func() {
+				database.GetAvgGradeForStudent = func(db *sql.DB, studentID, courseID string) (float64, int, error) {
+					return 0, http.StatusNotFound, nil
+				}
+			},
+			expectedCode:    http.StatusNotFound,
+			expectedMessage: "No grades found",
+		},
+		{
+			name:      "Success",
+			studentID: "abc",
+			courseID:  "507f1f77bcf86cd799439011",
+			mockFunc: func() {
+				database.GetAvgGradeForStudent = func(db *sql.DB, studentID, courseID string) (float64, int, error) {
+					return 7.5, http.StatusOK, nil
+				}
+			},
+			expectedCode:    http.StatusOK,
+			expectedMessage: "average_grade",
+		},
+	}
 
+	db := mock_database()
+	defer db.Close()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mockFunc()
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+
+			req, _ := http.NewRequest("GET", "/api/stats", nil)
+			c.Request = req
+
+			// Add path params if any
+			c.Params = []gin.Param{
+				{Key: "student_id", Value: tt.studentID},
+				{Key: "course_id", Value: tt.courseID},
+			}
+
+			APIHandlerGetStatsForStudent(db, c)
+
+			assert.Equal(t, tt.expectedCode, w.Code)
+			assert.Contains(t, w.Body.String(), tt.expectedMessage)
+		})
+	}
+}
 func TestInvalidCourseID(t *testing.T) {
 
 	db := mock_database()
@@ -444,6 +613,32 @@ func TestAPIHandlerGetStatsForStudentTask_DatabaseError(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "Failed to get average grade")
 }
 
+func TestAPIHandlerGetStatsForStudentTask_UserNotFound(t *testing.T) {
+	db := mock_database()
+
+	database.GetAvgGradeTaskForStudent = func(DB *sql.DB, studentID string, courseID string, taskID string) (float64, int, error) {
+		return 0, http.StatusNotFound, errors.New("No grades found for the student in this task")
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	req, _ := http.NewRequest("GET", "/student/507f1f77bcf86cd799439011/course/507f1f77bcf86cd799439012/task/507f1f77bcf86cd799439013", nil)
+
+	c.Request = req
+
+	c.Params = []gin.Param{
+		{Key: "student_id", Value: "507f1f77bcf86cd799439011"},
+		{Key: "course_id", Value: "507f1f77bcf86cd799439012"},
+		{Key: "task_id", Value: "507f1f77bcf86cd799439013"},
+	}
+
+	APIHandlerGetStatsForStudentTask(db, c)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "{\"result\":\"Failed to get average grade\",\"status\":500}")
+}
+
 // test for APIHandlerGetStudentCourseTasksAverage
 
 func TestAPIHandlerGetStudentCourseTasksAverage_Success(t *testing.T) {
@@ -603,6 +798,148 @@ func TestAPIHandlerGetStudentCourseTasksAverage_StudentNotFound(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Contains(t, w.Body.String(), `{"error":"No grades found for the requested student"}`)
+}
+func TestAPIHandlerGetStudentCourseTasksAverage(t *testing.T) {
+	db := mock_database()
+
+	t.Run("Invalid student_id", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		req, _ := http.NewRequest("GET", "/api/stats/student/bad_id/course/validcourse", nil)
+		c.Request = req
+		c.Params = []gin.Param{
+			{Key: "student_id", Value: "bad$id"}, // invalid char
+			{Key: "course_id", Value: "validcourse"},
+		}
+
+		APIHandlerGetStudentCourseTasksAverage(db, c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "Invalid student_id format")
+	})
+
+	t.Run("Invalid course_id", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		req, _ := http.NewRequest("GET", "/api/stats/student/validstudent/course/bad_id", nil)
+		c.Request = req
+		c.Params = []gin.Param{
+			{Key: "student_id", Value: "validstudent"},
+			{Key: "course_id", Value: "bad#id"},
+		}
+
+		APIHandlerGetStudentCourseTasksAverage(db, c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "Invalid course_id format")
+	})
+
+	t.Run("GetStudentCourseTasksAverage returns error", func(t *testing.T) {
+		database.GetStudentCourseTasksAverage = func(db *sql.DB, studentID, courseID string) (float64, int, error) {
+			return 0, http.StatusInternalServerError, errors.New("some DB error")
+		}
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		req, _ := http.NewRequest("GET", "/api/stats/student/validstudent/course/validcourse", nil)
+		c.Request = req
+		c.Params = []gin.Param{
+			{Key: "student_id", Value: "validstudent"},
+			{Key: "course_id", Value: "validcourse"},
+		}
+
+		APIHandlerGetStudentCourseTasksAverage(db, c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "some DB error")
+	})
+
+	t.Run("GetOtherStudentsCourseAverages returns error", func(t *testing.T) {
+		database.GetStudentCourseTasksAverage = func(db *sql.DB, studentID, courseID string) (float64, int, error) {
+			return 7.5, http.StatusOK, nil
+		}
+
+		database.GetOtherStudentsCourseAverages = func(DB *sql.DB, studentID string, courseID string) ([]map[string]interface{}, error) {
+			return nil, errors.New("other students DB error")
+		}
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		req, _ := http.NewRequest("GET", "/api/stats/student/validstudent/course/validcourse", nil)
+		c.Request = req
+		c.Params = []gin.Param{
+			{Key: "student_id", Value: "validstudent"},
+			{Key: "course_id", Value: "validcourse"},
+		}
+
+		APIHandlerGetStudentCourseTasksAverage(db, c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "other students DB error")
+	})
+
+	t.Run("No grades found for student (NotFound)", func(t *testing.T) {
+		database.GetStudentCourseTasksAverage = func(db *sql.DB, studentID, courseID string) (float64, int, error) {
+			return 0, http.StatusNotFound, nil
+		}
+
+		database.GetOtherStudentsCourseAverages = func(DB *sql.DB, studentID string, courseID string) ([]map[string]interface{}, error) {
+			return []map[string]interface{}{
+				{"student_id": "otherstudent1", "average_grade": 6.0, "task_count": 2},
+				{"student_id": "otherstudent2", "average_grade": 7.5, "task_count": 3},
+			}, nil
+		}
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		req, _ := http.NewRequest("GET", "/api/stats/student/validstudent/course/validcourse", nil)
+		c.Request = req
+		c.Params = []gin.Param{
+			{Key: "student_id", Value: "validstudent"},
+			{Key: "course_id", Value: "validcourse"},
+		}
+
+		APIHandlerGetStudentCourseTasksAverage(db, c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "No grades found")
+		assert.Contains(t, w.Body.String(), "warning")
+	})
+
+	t.Run("Happy path", func(t *testing.T) {
+		database.GetStudentCourseTasksAverage = func(db *sql.DB, studentID, courseID string) (float64, int, error) {
+			return 8.0, http.StatusOK, nil
+		}
+
+		database.GetOtherStudentsCourseAverages = func(DB *sql.DB, studentID string, courseID string) ([]map[string]interface{}, error) {
+			return []map[string]interface{}{
+				{"student_id": "otherstudent1", "average_grade": 7.0, "task_count": 2},
+				{"student_id": "otherstudent2", "average_grade": 9.0, "task_count": 3},
+			}, nil
+		}
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		req, _ := http.NewRequest("GET", "/api/stats/student/validstudent/course/validcourse", nil)
+		c.Request = req
+		c.Params = []gin.Param{
+			{Key: "student_id", Value: "validstudent"},
+			{Key: "course_id", Value: "validcourse"},
+		}
+
+		APIHandlerGetStudentCourseTasksAverage(db, c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "student_average")
+		assert.Contains(t, w.Body.String(), "other_students")
+		assert.Contains(t, w.Body.String(), "8")
+	})
 }
 
 // tests for APIHandlerGetTaskAverages

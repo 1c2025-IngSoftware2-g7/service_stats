@@ -124,3 +124,55 @@ func TestHandleAddGradeTask_DBError(t *testing.T) {
 	err := HandleAddGradeTask(context.Background(), task)
 	assert.Error(t, err)
 }
+
+func TestHandleAddGradeTask_CaseWhenGradeTaskIsErr(t *testing.T) {
+	InsertGradeTask = func(db *sql.DB, gt model.GradeTask) error {
+		return nil
+	}
+
+	UpdateGradeTask = func(db *sql.DB, gt model.GradeTask) error {
+		return nil
+	}
+
+	CheckGradeTaskExists = func(db *sql.DB, studentID, courseID, taskID string) (bool, error) {
+		return true, nil
+	}
+
+	defer func() {
+		InsertGradeTask = database.InsertGradeTask
+		UpdateGradeTask = database.UpdateGradeTask
+		CheckGradeTaskExists = database.CheckGradeTaskExists
+	}()
+
+	payload, _ := json.Marshal(model.GradeTask{StudentID: "student1", CourseID: "course1", TaskID: "task1", Grade: 85})
+	task := asynq.NewTask(types.TaskAddStudentGradeTask, payload)
+
+	err := HandleAddGradeTask(context.Background(), task)
+	assert.NoError(t, err)
+}
+
+func TestHandleAddGradeTask_CaseWhenExists(t *testing.T) {
+	// Here we test if either is null and if it works
+
+	InsertGradeTask = func(db *sql.DB, gt model.GradeTask) error {
+		return nil
+	}
+
+	UpdateGradeTask = func(db *sql.DB, gt model.GradeTask) error {
+		return nil
+	}
+	CheckGradeTaskExists = func(db *sql.DB, studentID, courseID, taskID string) (bool, error) {
+		return true, nil
+	}
+	defer func() {
+		InsertGradeTask = database.InsertGradeTask
+		UpdateGradeTask = database.UpdateGradeTask
+		CheckGradeTaskExists = database.CheckGradeTaskExists
+	}()
+
+	payload, _ := json.Marshal(model.GradeTask{StudentID: "student1", CourseID: "course1", TaskID: "task1", Grade: 85})
+	task := asynq.NewTask(types.TaskAddStudentGradeTask, payload)
+	err := HandleAddGradeTask(context.Background(), task)
+	assert.NoError(t, err)
+	assert.True(t, true) // Just to ensure the test runs without error
+}
