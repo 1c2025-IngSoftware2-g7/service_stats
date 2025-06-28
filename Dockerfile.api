@@ -20,13 +20,6 @@ WORKDIR /app_service_stats
 
 COPY --from=builder /app_service_stats/service_stats_api .
 
-# Copy the .env file (only if exists)
-COPY .env ./
-
-
-# Show list of files
-RUN ls -la
-
 EXPOSE 8080
 
 CMD ["./service_stats_api"]

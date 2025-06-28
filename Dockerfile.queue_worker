@@ -19,9 +19,5 @@ RUN apk add --no-cache ca-certificates
 WORKDIR /service_stats_queue_worker
 
 COPY --from=builder /service_stats_queue_worker/service_stats_queue_worker .
-COPY .env ./
-
-# Show list of files
-RUN ls -la
 
 CMD ["./service_stats_queue_worker"]
