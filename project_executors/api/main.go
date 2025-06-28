@@ -121,7 +121,7 @@ func main() {
 				c.JSON(400, gin.H{"error": "Invalid input"})
 				return
 			}
-
+			log.Printf("[Stats Service] Received task grade: %+v", grade)
 			// Enqueue the task to add student grade
 			handlers.EnqueueAddStadisticForStudent(c, enqueuer, grade)
 		})
@@ -144,6 +144,7 @@ func main() {
 				c.JSON(400, gin.H{"error": "Invalid input"})
 				return
 			}
+			log.Printf("[Stats Service] Received task grade: %+v", gradeTask)
 			handlers.EnqueueAddGradeTask(c, enqueuer, gradeTask)
 
 			//routing.GET("/student/:student_id/course/:course_id/task/:task_id", handlers.APIHandlerGetStatsForStudentTask)
