@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"service_stats/internal/database"
 	"time"
-	"unicode"
+	//"unicode"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,11 +19,11 @@ func isValidObjectID(id string) bool {
 		return false
 	}
 	// Verifica que solo contenga caracteres alfanuméricos
-	for _, c := range id {
-		if !unicode.IsLetter(c) && !unicode.IsNumber(c) {
-			return false
-		}
-	}
+	// for _, c := range id {
+	// 	if !unicode.IsLetter(c) && !unicode.IsNumber(c) {
+	// 		return false
+	// 	}
+	// }
 	return true
 }
 
