@@ -57,7 +57,7 @@ func TestIsValidObjectID_MultipleTests(t *testing.T) {
 		},
 		{
 			name:     "Length 1 invalid char",
-			input:    "-",
+			input:    "?",
 			expected: false,
 		},
 		{
